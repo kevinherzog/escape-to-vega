@@ -827,7 +827,7 @@ function derive(s) {
     if (role === 'gunner') return 'Weapons +' + Math.round(v * 100) + '% charge speed';
     if (role === 'pilot') return '+' + v + '% evasion';
     if (role === 'tech') return 'Shields +' + Math.round(v * 100) + '% charge speed';
-    return '+1 hull every ' + String(v).replace('.', ',') + ' s in combat';
+    return '+1 hull every ' + String(v) + ' s in combat';
   }
 
   // ---------- Difficulty ----------
@@ -1732,7 +1732,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   }
   function ic(id, cls) { return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#' + id + '"/></svg>'; }
   function cost(n) { return '<span class="cost">' + ic('i-scrap') + n + '</span>'; }
-  function fmt(x, d) { return x.toFixed(d == null ? 1 : d).replace('.', ','); }
+  function fmt(x, d) { return x.toFixed(d == null ? 1 : d); }
   function stars(n) { return '<span class="stars" aria-label="' + n + (n === 1 ? ' star' : ' stars') + '">' + new Array(n + 1).join('★') + '</span>'; }
   function hullState(f) { return f > 0.5 ? 'ok' : f > 0.25 ? 'warn' : 'crit'; }
   function $(sel) { return document.querySelector(sel); }
