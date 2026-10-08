@@ -1,0 +1,2436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1210">
+<title>Escape to Vega</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Vega">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil:wght@800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+:root {
+  /* Portrait console: one column of instrument panels; in combat a vertical radar lane between enemy (top) and Albatross (bottom) */
+  --bg: #d6ddd7;          /* console paint, green-grey */
+  --panel: #edf1ec;       /* instrument panel */
+  --panel-2: #e0e7e1;     /* recessed fields */
+  --ink: #17201a;
+  --muted: #53615a;
+  --line: #b2bfb5;
+  --signal: #c94a17;      /* signal orange: primary actions */
+  --signal-ink: #fff8f2;
+  --brass: #855d00;       /* scrap */
+  --shield: #1d6aa6;
+  --ok: #2a7a45;
+  --warn: #a86a00;
+  --crit: #bb2e29;
+  --focus: #1d6aa6;
+  /* Radar screen: stays dark in both themes */
+  --screen: #070b08;
+  --screen-2: #0f1611;
+  --screen-ink: #ffb547;
+  --screen-dim: #6e5631;
+  --screen-grid: rgba(255, 181, 71, 0.07);
+  --foe: #ff6040;
+  --w-laser: #ff6a3d;
+  --w-ion: #5cc8ff;
+  --w-missile: #ffd166;
+  --w-beam: #c49bff;
+  --w-flak: #ffe39a;
+  --shield-screen: #5cc8ff;
+  --bonus-screen: #d9c2ff;
+  --rep-screen: #7be495;
+
+  --font-display: "Big Shoulders Stencil", "Big Shoulders Stencil Display", "Arial Narrow", "Roboto Condensed", Impact, sans-serif;
+  --font-ui: "Chakra Petch", Roboto, "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "Roboto Mono", "SFMono-Regular", Menlo, monospace;
+
+  --r: 4px;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(23, 32, 26, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1210; --panel: #161c18; --panel-2: #1d2520; --ink: #e1e8e0; --muted: #8f9d93; --line: #2c3630;
+    --signal: #ff6a2b; --signal-ink: #1b0c03; --brass: #e2ad3f; --shield: #5bb5f2;
+    --ok: #52c47a; --warn: #f0a83a; --crit: #ff5e56; --focus: #5bb5f2;
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1210; --panel: #161c18; --panel-2: #1d2520; --ink: #e1e8e0; --muted: #8f9d93; --line: #2c3630;
+  --signal: #ff6a2b; --signal-ink: #1b0c03; --brass: #e2ad3f; --shield: #5bb5f2;
+  --ok: #52c47a; --warn: #f0a83a; --crit: #ff5e56; --focus: #5bb5f2;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 15px/1.45 var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; }
+.ic { width: 1.15em; height: 1.15em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.2em; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.app { max-width: 560px; margin-inline: auto; padding-inline: 16px; padding-block: 12px 0; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
+
+/* ---------- Header ---------- */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  margin-inline: -16px; padding: 10px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center;
+}
+.top-route { font: 600 12px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pips { display: inline-flex; gap: 3px; }
+.pip { width: 9px; height: 9px; border: 1.5px solid var(--muted); border-radius: 50%; }
+.pip.done { background: var(--muted); }
+.pip.now { border-color: var(--signal); background: var(--signal); }
+.pip.gate { border-radius: 2px; transform: rotate(45deg); width: 8px; height: 8px; }
+.scrap { display: inline-flex; align-items: center; gap: 5px; color: var(--brass); font: 600 16px/1 var(--font-data); font-variant-numeric: tabular-nums; }
+.top .hull { grid-column: 1 / -1; }
+
+/* ---------- Hull bar ---------- */
+.hull { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+.hull-label { font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.bar { position: relative; height: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+.bar > i { position: absolute; inset: 0 auto 0 0; background: var(--ok); transition: width 0.25s ease; }
+.bar > i[data-s="warn"] { background: var(--warn); }
+.bar > i[data-s="crit"] { background: var(--crit); }
+.bar::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), var(--panel) calc(10% - 1px) 10%); opacity: 0.55; }
+.hull-num { font: 600 13px/1 var(--font-data); font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
+
+/* ---------- Panels ---------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 14px 14px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  background-image:
+    radial-gradient(circle at 7px 7px, var(--line) 1.6px, transparent 2.2px),
+    radial-gradient(circle at calc(100% - 7px) 7px, var(--line) 1.6px, transparent 2.2px);
+}
+.plate { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-inline: 8px; }
+.plate h2 { margin: 0; font: 600 12px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.plate .meta { font: 600 12px/1.2 var(--font-data); color: var(--muted); font-variant-numeric: tabular-nums; }
+.note { margin: 0; font-size: 13px; color: var(--muted); }
+.pad { padding-inline: 8px; }
+[hidden] { display: none !important; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+  min-height: 48px; padding: 10px 14px; border-radius: var(--r);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: 600 15px/1.2 var(--font-ui); cursor: pointer; touch-action: manipulation; text-align: center;
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
+.btn-block { width: 100%; }
+.btn-small { min-height: 40px; padding: 8px 12px; font-size: 14px; }
+.btn:focus-visible, .card:focus-visible, .choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cost { display: inline-flex; align-items: center; gap: 3px; font: 600 14px/1 var(--font-data); font-variant-numeric: tabular-nums; }
+.btn-primary .cost { color: inherit; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.row-actions .btn { flex: 1 1 140px; }
+
+/* ---------- Ship stats ---------- */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+.stat { background: var(--panel-2); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat dt { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.stat dd { margin: 0; font: 600 15px/1.2 var(--font-data); font-variant-numeric: tabular-nums; }
+.stat dd small { font: 500 12px/1.2 var(--font-ui); color: var(--muted); }
+
+/* ---------- Weapons ---------- */
+.wlist { display: flex; flex-direction: column; gap: 6px; }
+.wrow {
+  display: grid; grid-template-columns: 12px 1fr auto; gap: 4px 10px; align-items: center;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px;
+  text-align: left; width: 100%;
+}
+button.wrow { cursor: pointer; }
+.wrow[aria-pressed="true"] { border-color: var(--signal); }
+.wdot { width: 10px; height: 10px; border-radius: 50%; background: var(--w-laser); box-shadow: 0 0 0 2px var(--panel); }
+.wdot[data-k="ion"] { background: var(--w-ion); }
+.wdot[data-k="missile"] { background: var(--w-missile); }
+.wdot[data-k="beam"] { background: var(--w-beam); }
+.wdot[data-k="flak"] { background: var(--w-flak); }
+.wdot[data-k="heavy"] { background: var(--w-laser); border-radius: 2px; }
+.wname { font-weight: 600; }
+.wdesc { grid-column: 2 / 3; font-size: 13px; color: var(--muted); }
+.wtime { font: 600 13px/1.2 var(--font-data); color: var(--muted); grid-row: 1 / 3; grid-column: 3; text-align: right; }
+.wrow.empty { border-style: dashed; color: var(--muted); grid-template-columns: 1fr; }
+.sellbar { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+
+/* ---------- Crew ---------- */
+.crew { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.card {
+  appearance: none; text-align: left; cursor: pointer; width: 100%;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 10px 10px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.card[aria-pressed="true"] { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal); }
+.card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.cname { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.stars { color: var(--brass); letter-spacing: 1px; font-size: 13px; white-space: nowrap; }
+.tags { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; }
+.tag .ic { color: var(--muted); }
+.eff { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.card.empty { cursor: default; border-style: dashed; background: transparent; color: var(--muted); align-items: center; justify-content: center; min-height: 96px; font-size: 13px; }
+
+/* ---------- Synergies ---------- */
+.syn { display: flex; flex-direction: column; gap: 6px; }
+.synrow { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 10px; align-items: center; }
+.synrow .ic { color: var(--muted); }
+.synrow.on .ic { color: var(--signal); }
+.synname { font-weight: 600; font-size: 14px; }
+.syneff { grid-column: 2 / 4; font-size: 12.5px; color: var(--muted); }
+.synrow.on .syneff { color: var(--ink); }
+.cells { display: inline-flex; gap: 3px; }
+.cells i { width: 12px; height: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+.cells i.f { background: var(--muted); border-color: var(--muted); }
+.synrow.on .cells i.f { background: var(--signal); border-color: var(--signal); }
+.cells i:nth-child(2) { margin-right: 4px; }
+details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); padding-block: 4px; }
+details.more[open] summary { margin-bottom: 6px; }
+
+/* ---------- Difficulty picker ---------- */
+.diffs { display: flex; flex-direction: column; gap: 6px; }
+.diffrow { align-items: flex-start; text-align: left; flex-direction: column; gap: 2px; padding: 10px 12px; }
+.diffrow[aria-pressed="true"] { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal); }
+.diffrow .diffname { font-weight: 700; }
+.diffrow small { font: 500 12.5px/1.3 var(--font-ui); color: var(--muted); }
+.diffrow.on small { color: var(--ink); }
+
+.rellist { display: flex; flex-direction: column; gap: 8px; }
+.relrow { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 10px; align-items: center; }
+.relrow .ic { color: var(--signal); }
+.relname { font-weight: 600; font-size: 14px; }
+.reldesc { grid-column: 2 / 4; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.opt.relopt { border-color: var(--signal); }
+.opt.relopt > span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+   ==========================================================================
+
+/* ---------- Recruit ---------- */
+.offers { display: flex; flex-direction: column; gap: 6px; }
+.offer {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 8px 8px 12px;
+}
+.offer.sold { opacity: 0.5; }
+.otype { display: flex; flex-wrap: wrap; gap: 4px 12px; font-weight: 600; font-size: 14px; }
+.oeff { font-size: 12.5px; color: var(--muted); }
+.badge { display: inline-block; font: 600 11px/1.3 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; border: 1px solid var(--line); color: var(--muted); margin-right: 4px; }
+.badge.hot { border-color: var(--signal); color: var(--signal); }
+.badge.syn { border-color: var(--shield); color: var(--shield); }
+.badge.double { border-color: var(--signal); background: var(--signal); color: var(--signal-ink); font-weight: 700; }
+.offer .btn { min-width: 64px; grid-row: 1 / 4; grid-column: 2; }
+.offer > .otype, .offer > .oeff, .offer > .obadges { grid-column: 1; min-width: 0; }
+.obadges { display: flex; flex-wrap: wrap; gap: 4px; }
+.obadges .badge { margin-right: 0; }
+
+/* ---------- Upgrades ---------- */
+.upgs { display: flex; flex-direction: column; }
+.upg { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 8px 0 8px 8px; border-top: 1px solid var(--line); }
+.upg:first-child { border-top: 0; }
+.upg b { font-size: 14px; }
+.upg span { font-size: 12.5px; color: var(--muted); grid-column: 1; }
+.upg .btn { grid-row: 1 / 3; grid-column: 2; min-width: 72px; }
+
+/* ---------- Footer ---------- */
+.foot {
+  position: sticky; bottom: 0; z-index: 5; margin-top: auto;
+  margin-inline: -16px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg); border-top: 1px solid var(--line);
+  display: flex; gap: 10px; align-items: center;
+}
+.foot .note { flex: 1; min-width: 0; }
+.foot .btn { flex: none; }
+
+/* ---------- Radar screen (title, map, combat) ---------- */
+.screen {
+  position: relative; overflow: hidden; border-radius: var(--r);
+  background:
+    radial-gradient(ellipse at 50% 50%, var(--screen-2) 0%, var(--screen) 75%);
+  color: var(--screen-ink);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
+}
+.screen::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(var(--screen-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--screen-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.screen::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
+}
+
+/* ---------- Title ---------- */
+.title-hero { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
+.eyebrow { font: 600 12px/1.2 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--signal); margin: 0; }
+.display { font: 800 clamp(48px, 15vw, 72px)/0.9 var(--font-display); letter-spacing: 0.01em; text-transform: uppercase; margin: 0; text-wrap: balance; }
+.lead { margin: 0; font-size: 16px; max-width: 34em; }
+.route-screen { padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 12px; }
+.route { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 10px; }
+.route .seg { flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.route .seg-l { font: 500 10.5px/1 var(--font-data); letter-spacing: 0.1em; text-transform: uppercase; color: var(--screen-dim); white-space: nowrap; }
+.route .seg-d { position: relative; height: 12px; display: flex; align-items: center; justify-content: space-between; }
+.route .seg-d::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--screen-dim); }
+.route .dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--screen); border: 1.5px solid var(--screen-ink); }
+.route .dot.done { background: var(--screen-ink); }
+.route .dot.here { background: var(--screen-ink); box-shadow: 0 0 0 4px rgba(255, 181, 71, 0.25); }
+.route .gate { width: 9px; height: 9px; border-radius: 1px; transform: rotate(45deg); }
+.route .start { height: 12px; display: flex; align-items: center; color: var(--screen-ink); }
+.route .start .ic { width: 16px; height: 16px; }
+.route .vega { height: 12px; display: flex; align-items: center; font: 700 14px/1 var(--font-data); letter-spacing: 0.12em; text-transform: uppercase; color: var(--screen-ink); text-shadow: 0 0 10px rgba(255, 181, 71, 0.7); }
+.route-foot { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 8px; font: 500 11px/1.2 var(--font-data); letter-spacing: 0.06em; color: var(--screen-dim); }
+.rules { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.rules li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; font-size: 14.5px; }
+.rules .ic { color: var(--signal); margin-top: 2px; }
+.record { font: 500 13px/1.4 var(--font-data); color: var(--muted); }
+
+/* ---------- Star map ---------- */
+.choices { display: flex; flex-direction: column; gap: 8px; }
+.choice {
+  appearance: none; width: 100%; text-align: left; cursor: pointer;
+  display: grid; grid-template-columns: 40px 1fr auto; gap: 2px 12px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow);
+  padding: 14px 14px;
+}
+.choice .ic { width: 28px; height: 28px; grid-row: 1 / 3; color: var(--ink); }
+.choice[data-t="elite"] .ic, .choice[data-t="guardian"] .ic, .choice[data-t="boss"] .ic { color: var(--crit); }
+.choice[data-t="shop"] .ic, .choice[data-t="dock"] .ic { color: var(--ok); }
+.choice[data-t="event"] .ic { color: var(--shield); }
+.choice b { font-size: 16px; }
+.choice span { font-size: 13px; color: var(--muted); grid-column: 2; }
+.choice .go { grid-row: 1 / 3; grid-column: 3; color: var(--signal); width: 22px; height: 22px; }
+.choice:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Event ---------- */
+.ev-title { margin: 0; font: 800 34px/1 var(--font-display); text-transform: uppercase; padding-inline: 8px; }
+.ev-text { margin: 0; font-size: 16px; padding-inline: 8px; }
+.ev-out { margin: 0; font-size: 16px; padding: 12px 14px; background: var(--panel-2); border-left: 3px solid var(--signal); border-radius: 2px; }
+.opt { display: flex; flex-direction: column; align-items: stretch; text-align: left; gap: 2px; padding: 12px 14px; }
+.opt small { font: 500 13px/1.3 var(--font-ui); color: var(--muted); }
+.opt.btn-primary small { color: inherit; opacity: 0.85; }
+
+/* ---------- Loot ---------- */
+.gains { display: flex; flex-direction: column; gap: 6px; padding-inline: 8px; font-size: 16px; }
+.gains .num { font-weight: 600; }
+.loot { display: grid; grid-template-columns: 1fr; gap: 8px; }
+
+/* ---------- Combat ---------- */
+.combat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; }
+.sidep { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; box-shadow: var(--shadow); }
+.sidep-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sidep-name { font: 800 22px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+.sidep-name.foe { color: var(--crit); }
+.sidep-meta { font: 600 12px/1.2 var(--font-data); color: var(--muted); white-space: nowrap; }
+.spips { display: flex; gap: 4px; align-items: center; min-height: 14px; flex-wrap: wrap; }
+.spip { width: 18px; height: 10px; border: 1.5px solid var(--shield); border-radius: 2px; position: relative; overflow: hidden; }
+.spip.on { background: var(--shield); }
+.spip > i { position: absolute; inset: 0 auto 0 0; background: var(--shield); opacity: 0.35; }
+.spip.bonus { border-style: dashed; border-color: var(--muted); }
+.spip.bonus.on { background: var(--muted); }
+.spip.lock { border-color: var(--crit); }
+.slabel { font: 600 11px/1 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.wcharge { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 4px 10px; }
+.wc { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); min-width: 0; }
+.wc span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wc .cb { height: 4px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
+.wc .cb > i { display: block; height: 100%; width: 100%; background: var(--signal); transform-origin: left; transform: scaleX(0); }
+
+.lane { height: clamp(240px, calc(100vh - 380px), 520px); height: clamp(240px, calc(100svh - 380px), 520px); }
+.lane .ship { position: absolute; left: 50%; transform: translate(-50%, -50%); width: 64px; height: 64px; z-index: 1; }
+.lane .ship svg { width: 100%; height: 100%; overflow: visible; }
+.ship-e { top: 19%; color: var(--foe); }
+.ship-p { top: 81%; color: var(--screen-ink); }
+.ship.boss { width: 92px; height: 92px; }
+.shipart path { fill: currentColor; fill-opacity: 0.14; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.shipart .glow { fill: none; stroke-dasharray: 2 3; opacity: 0.8; }
+.bubble { position: absolute; inset: -14px -18px; border-radius: 50%; border: 2px solid var(--shield-screen); opacity: 0; transition: opacity 0.2s; box-shadow: 0 0 12px rgba(92, 200, 255, 0.35), inset 0 0 12px rgba(92, 200, 255, 0.25); }
+.bubble.bonus { inset: -20px -24px; border-style: dashed; border-color: var(--bonus-screen); box-shadow: none; }
+.ship.hit { animation: shake 0.28s linear; }
+.ship.hit svg { filter: drop-shadow(0 0 6px var(--foe)); }
+.ship.blk .bubble { opacity: 1 !important; }
+@keyframes shake { 0%, 100% { transform: translate(-50%, -50%); } 25% { transform: translate(calc(-50% - 4px), -50%); } 50% { transform: translate(calc(-50% + 3px), calc(-50% + 1px)); } 75% { transform: translate(calc(-50% - 2px), -50%); } }
+.shots, .fxl { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.shot { position: absolute; width: 4px; height: 14px; margin: -7px 0 0 -2px; border-radius: 2px; background: var(--w-laser); box-shadow: 0 0 8px var(--w-laser); }
+.shot.e { background: var(--foe); box-shadow: 0 0 8px var(--foe); }
+.shot[data-k="ion"] { background: var(--w-ion); box-shadow: 0 0 10px var(--w-ion); width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; }
+.shot[data-k="missile"] { background: var(--w-missile); box-shadow: 0 0 10px var(--w-missile); width: 5px; height: 16px; }
+.shot[data-k="flak"] { background: var(--w-flak); box-shadow: 0 0 6px var(--w-flak); width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 1px; }
+.beam { position: absolute; width: 3px; margin-left: -1.5px; background: var(--w-beam); box-shadow: 0 0 12px var(--w-beam); border-radius: 2px; }
+.fx { position: absolute; transform: translate(-50%, -50%); font: 700 15px/1 var(--font-data); white-space: nowrap; text-shadow: 0 0 8px rgba(0, 0, 0, 0.9); animation: rise 0.95s ease-out forwards; }
+.fx.dmg { color: var(--foe); font-size: 18px; }
+.fx.dmg.p { color: #ff8a6a; }
+.fx.blk { color: var(--shield-screen); }
+.fx.miss { color: var(--screen-dim); }
+.fx.ion { color: var(--w-ion); }
+.fx.rep { color: var(--rep-screen); }
+@keyframes rise { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(-50%, calc(-50% - 28px)); } }
+.lane-msg { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; z-index: 3; font: 600 12px/1.2 var(--font-data); letter-spacing: 0.14em; text-transform: uppercase; color: var(--screen-ink); pointer-events: none; }
+.lane-msg.intro { animation: fadeout 1.6s ease-in forwards; font: 800 26px/1 var(--font-display); letter-spacing: 0.04em; }
+.lane-heat { position: absolute; left: 8px; top: 8px; z-index: 3; font: 600 10.5px/1 var(--font-data); letter-spacing: 0.1em; color: var(--foe); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
+@keyframes fadeout { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
+.ctrl { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.speed { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.speed button { appearance: none; border: 0; border-right: 1px solid var(--line); background: var(--panel-2); min-width: 48px; min-height: 48px; font: 600 14px/1 var(--font-data); cursor: pointer; }
+.speed button:last-child { border-right: 0; }
+.speed button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.fleebtn { flex: 1; position: relative; overflow: hidden; }
+.noflee { flex: 1; align-self: center; }
+.fleebtn .fill { position: absolute; inset: 0 auto 0 0; background: var(--line); opacity: 0.6; transform-origin: left; }
+.fleebtn span { position: relative; }
+.cend { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(7, 11, 8, 0.82); text-align: center; padding: 16px; }
+.cend b { font: 800 44px/0.95 var(--font-display); letter-spacing: 0.03em; text-transform: uppercase; }
+.cend b.win { color: var(--screen-ink); }
+.cend b.lose { color: var(--foe); }
+.cend p { margin: 0; font: 500 13px/1.4 var(--font-data); color: var(--screen-ink); }
+
+/* ---------- End ---------- */
+.end-hero { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; }
+.end-hero .display.lose { color: var(--crit); }
+
+/* ---------- Toasts ---------- */
+.toasts { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; gap: 6px; align-items: center; width: min(92vw, 480px); pointer-events: none; }
+.toast { background: var(--ink); color: var(--panel); font: 600 14px/1.3 var(--font-ui); padding: 10px 14px; border-radius: var(--r); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); animation: toast 2.6s ease forwards; text-align: center; }
+@keyframes toast { 0% { opacity: 0; transform: translateY(8px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ship.hit { animation: none; }
+  .fx { animation: fadeout 0.95s linear forwards; }
+  .lane-heat { animation: none; }
+  .bar > i { transition: none; }
+}
+@media (min-width: 520px) {
+  .loot { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-gunner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/><circle cx="12" cy="12" r="1.2"/></symbol>
+    <symbol id="i-pilot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+    <symbol id="i-tech" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+    <symbol id="i-engineer" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></symbol>
+    <symbol id="i-human" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/></symbol>
+    <symbol id="i-rock" viewBox="0 0 24 24"><path d="M8 3h8l4 6-8 12L4 9z"/><path d="M4 9h16M10 3l2 6 2-6M12 9v12"/></symbol>
+    <symbol id="i-bug" viewBox="0 0 24 24"><ellipse cx="12" cy="14" rx="4" ry="6"/><path d="M12 8V6M9 4l3 2 3-2M8 12H4M8 16l-3 2M16 12h4M16 16l3 2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2z"/></symbol>
+    <symbol id="i-fight" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/><path d="M5 10V5h5M19 10V5h-5"/></symbol>
+    <symbol id="i-elite" viewBox="0 0 24 24"><path d="M12 3l9.5 17h-19z"/><path d="M12 9.5v5M12 17.5v.1"/></symbol>
+    <symbol id="i-event" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.8M12 17v.1"/></symbol>
+    <symbol id="i-shop" viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/></symbol>
+    <symbol id="i-dock" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M12 8v8M8 12h8"/></symbol>
+    <symbol id="i-guardian" viewBox="0 0 24 24"><path d="M5 21V10a7 7 0 0 1 14 0v11"/><path d="M9 21v-9a3 3 0 0 1 6 0v9"/></symbol>
+    <symbol id="i-boss" viewBox="0 0 24 24"><path d="M3 18h18M4 17l2-9 4 4 2-7 2 7 4-4 2 9"/></symbol>
+    <symbol id="i-scrap" viewBox="0 0 24 24"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+    <symbol id="i-hull" viewBox="0 0 24 24"><path d="M12 2l5 7v9l-5 4-5-4V9z"/></symbol>
+    <symbol id="i-go" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-jump" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><path d="M4 17l5-5 4 4 7-8"/><path d="M15 8h5v5"/></symbol>
+  </defs>
+</svg>
+<div id="app" class="app"></div>
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+<script>
+/* Escape to Vega – game logic (pure, no DOM). Runs in the browser and in Node. */
+var VEGA = (function () {
+  'use strict';
+
+  // ---------- Randomness ----------
+  var rnd = Math.random;
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function seed(s) { rnd = mulberry32(s >>> 0); }
+  function unseed() { rnd = Math.random; }
+  var R = {
+    f: function () { return rnd(); },
+    int: function (a, b) { return a + Math.floor(rnd() * (b - a + 1)); },
+    pick: function (arr) { return arr[Math.floor(rnd() * arr.length)]; },
+    chance: function (p) { return rnd() < p; },
+    shuffle: function (arr) {
+      var a = arr.slice();
+      for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+      return a;
+    }
+  };
+
+  // ---------- Constants ----------
+  var C = {
+    START_HULL: 30,
+    SHIELD_REGEN: 6,          // seconds per shield layer
+    SECTOR_LEN: 5,            // normal jumps per sector, then guardian/flagship
+    SECTORS: 3,
+    CREW_PRICE: 3,
+    REROLL_PRICE: 2,
+    SHIELD_COST: { 2: 14, 3: 22, 4: 32 },
+    ENGINE_COST: { 2: 6, 3: 9, 4: 12, 5: 16, 6: 20 },
+    CAP_COST: { 5: 5, 6: 7, 7: 9, 8: 11 },
+    SLOT_COST: 14,
+    REPAIR_PRICE: 3, REPAIR_AMOUNT: 4,
+    DOCK_HEAL: 12,
+    FLEE_CHARGE: 18,          // seconds until the jump drive is ready to flee
+    INTEREST_STEP: 10, INTEREST_MAX: 5,
+    EVASION_CAP: 60,
+    HEAT_START: 32,           // shield generators start overheating past this point
+    HEAT_RAMP: 12,            // every 12 s, shields charge a multiple slower
+    BREAKDOWN: 240,           // emergency brake: structural damage to both sides after this
+    SELL: [2, 7, 22]
+  };
+
+  // ---------- Data ----------
+  var ROLES = {
+    gunner:   { name: 'Gunner',     plural: 'Gunners' },
+    pilot:    { name: 'Pilot',      plural: 'Pilots' },
+    tech:     { name: 'Technician', plural: 'Technicians' },
+    engineer: { name: 'Engineer',   plural: 'Engineers' }
+  };
+  var ORIGINS = {
+    human: { name: 'Human',       plural: 'Humans' },
+    rock:  { name: 'Crystalline', plural: 'Crystallines' },
+    bug:   { name: 'Insectoid',   plural: 'Insectoids' },
+    spark: { name: 'Energy Being', plural: 'Energy Beings' }
+  };
+  var ROLE_KEYS = ['gunner', 'pilot', 'tech', 'engineer'];
+  var ORIGIN_KEYS = ['human', 'rock', 'bug', 'spark'];
+  var NAMES = {
+    human: ['Ada', 'Bram', 'Cleo', 'Dario', 'Ella', 'Finn', 'Greta', 'Hugo', 'Ines', 'Jonas', 'Kira', 'Lars', 'Mila', 'Nico', 'Oskar', 'Pia', 'Rosa', 'Theo'],
+    rock:  ['Basalt', 'Quarz', 'Granit', 'Onyx', 'Flint', 'Gneis', 'Jaspis', 'Achat', 'Kiesel', 'Pyrit', 'Feldspat', 'Glimmer'],
+    bug:   ['Kzzt', 'Tikka', 'Zirr', 'Klak', 'Vexa', 'Chitra', 'Skarr', 'Mibb', 'Trrk', 'Ix', 'Sesk', 'Akka'],
+    spark: ['Lumen', 'Volta', 'Flux', 'Aura', 'Nova', 'Zeta', 'Glimm', 'Funke', 'Ohm', 'Lux', 'Plasma', 'Ampere']
+  };
+
+  // Effect per crew member by star rank (1, 2, 3)
+  var ROLE_VAL = {
+    gunner:   [0.07, 0.15, 0.30],   // + weapon charge speed
+    pilot:    [4, 9, 16],           // + evasion percentage points
+    tech:     [0.18, 0.38, 0.70],   // + shield charge speed
+    engineer: [14, 8, 4]            // seconds per hull point repaired in combat
+  };
+
+  var SYNERGIES = [
+    { key: 'gunner',   kind: 'role',   tiers: ['Weapons charge 10% faster', 'Weapons charge 25% faster, combat starts half-charged'] },
+    { key: 'pilot',    kind: 'role',   tiers: ['+8% evasion', '+18% evasion'] },
+    { key: 'tech',     kind: 'role',   tiers: ['+1 shield layer', '+2 shield layers'] },
+    { key: 'engineer', kind: 'role',   tiers: ['+4 hull after every victory', '+8 hull after every victory, in-combat repair twice as fast'] },
+    { key: 'human',    kind: 'origin', tiers: ['+2 scrap per victory', '+5 scrap per victory'] },
+    { key: 'rock',     kind: 'origin', tiers: ['+8 max hull', '+20 max hull'] },
+    { key: 'bug',      kind: 'origin', tiers: ['Boarding party: 1 damage every 7 s', 'Boarding party: 2 damage every 5 s'] },
+    { key: 'spark',    kind: 'origin', tiers: ['3 extra shields, recharge slowly', '5 extra shields, recharge slowly, shields charge 25% faster'] }
+  ];
+
+  var WEAPONS = {
+    laser:   { name: 'Laser',        shots: 1, dmg: 1, charge: 6,  price: 5,  kind: 'proj',    desc: '1 shot, 1 damage' },
+    burst:   { name: 'Double Laser', shots: 2, dmg: 1, charge: 8,  price: 8,  kind: 'proj',    desc: '2 shots, 1 damage each' },
+    heavy:   { name: 'Heavy Laser',  shots: 1, dmg: 2, charge: 8,  price: 8,  kind: 'proj',    desc: '1 shot, 2 damage' },
+    ion:     { name: 'Ion Cannon',   shots: 1, dmg: 0, charge: 5,  price: 7,  kind: 'ion',     desc: 'Strips 1 shield and halts shield charging for 3 s' },
+    missile: { name: 'Missile',      shots: 1, dmg: 3, charge: 10, price: 10, kind: 'missile', desc: '3 damage, bypasses shields' },
+    beam:    { name: 'Beam',         shots: 1, dmg: 4, charge: 10, price: 10, kind: 'beam',    desc: 'Always hits, 4 damage minus shields' },
+    flak:    { name: 'Flak',           shots: 3, dmg: 1, charge: 11, price: 11, kind: 'proj',    desc: '3 fragments, 1 damage each' },
+    mining:  { name: 'Mining Laser',   shots: 1, dmg: 1, charge: 4,  price: 4,  kind: 'proj',    desc: '1 shot, 1 damage, charges fast' },
+    buckshot:{ name: 'Buckshot',       shots: 5, dmg: 1, charge: 14, price: 12, kind: 'proj',    desc: '5 pellets, 1 damage each' },
+    rail:    { name: 'Railgun',        shots: 1, dmg: 5, charge: 16, price: 13, kind: 'proj',    desc: '1 shot, 5 damage, slow to charge' },
+    swarm:   { name: 'Swarm Missiles', shots: 2, dmg: 2, charge: 13, price: 13, kind: 'missile', desc: '2 warheads, 2 damage each, through shields' },
+    ionburst:{ name: 'Ion Burst',      shots: 2, dmg: 0, charge: 9,  price: 10, kind: 'ion',     desc: 'Tears off 2 shields and stalls shield charge' },
+    lance:   { name: 'Lance',          shots: 1, dmg: 2, charge: 6,  price: 9,  kind: 'beam',    desc: 'Always hits, 2 damage minus shields' }
+  };
+
+  /* RELICS_APPLIED */
+  var RELICS = {
+    /* ---- tier 1: solid, always useful ---- */
+    lathe:    { key: 'lathe',    tier: 1, name: 'Salvage Lathe',
+                desc: 'Every 5 damage you deal pays 1 scrap.', per: 5 },
+    ledger:   { key: 'ledger',   tier: 1, name: 'Syndicate Ledger',
+                desc: 'Each won fight pays 15 % interest on your scrap (max +8).', rate: 0.15, cap: 8 },
+    welder:   { key: 'welder',   tier: 1, name: 'Weld Drone',
+                desc: 'In-combat repair fixes 2 hull per cycle, and runs even with no engineer.', amt: 2, every: 14 },
+    veil:     { key: 'veil',     tier: 1, name: 'Phase Veil',
+                desc: 'Beams can miss you (half evasion). Every dodge charges all weapons +4 %.', half: 0.5, charge: 0.04 },
+    blackbox: { key: 'blackbox', tier: 1, name: 'Black Box',
+                desc: 'One extra loot choice. Trading posts stock a fourth weapon.' },
+
+    /* ---- tier 2: changes how a fight plays out ---- */
+    coil:     { key: 'coil',     tier: 2, name: 'Coil Spring',
+                desc: 'Your first shield layer recharges in 1.2 s.', sec: 1.2 },
+    spike:    { key: 'spike',    tier: 2, name: 'Ion Spike',
+                desc: 'Your ion hits also jam an enemy weapon for 4 s.', sec: 4 },
+    cascade:  { key: 'cascade',  tier: 2, name: 'Cascade Capacitor',
+                desc: 'A shield of yours breaking fires your most-charged weapon at once.', cd: 1.2 },
+    reactor:  { key: 'reactor',  tier: 2, name: 'Hoard Reactor',
+                desc: 'While you hold 40+ scrap: +1 shield layer, weapons start 60 % charged.', need: 40, start: 0.6, shield: 1 },
+
+    /* ---- tier 3: build payoffs. these are meant to break the game ---- */
+    hive:     { key: 'hive',     tier: 3, name: 'Hive Resonator',
+                desc: 'Boarding damage doubled, +1 more per 2 Insectoids aboard.', mul: 2, per: 2, base: 9 },
+    chorus:   { key: 'chorus',   tier: 3, name: 'Chorus Engine',
+                desc: 'While 4 of one origin are aboard: +40 % weapon charge and +2 shield layers.', charge: 0.40, shield: 2 },
+    prism:    { key: 'prism',    tier: 3, name: 'Prism Lens',
+                desc: 'Your beams fire twice and ignore 2 enemy shields.', pierce: 2 }
+  };
+
+  var RELIC_KEYS = ['lathe', 'ledger', 'welder', 'veil', 'blackbox', 'coil', 'spike', 'cascade', 'reactor', 'hive', 'chorus', 'prism'];
+  var RELIC_PRICE = { 1: 12, 2: 20, 3: 32 };
+  /* drop weight per tier, by sector: commons early, legendaries late */
+  var RELIC_W = { 1: [70, 28, 2], 2: [45, 40, 15], 3: [25, 45, 30] };
+
+  function hasRelic(s, k) { return !!(s.relics && s.relics.indexOf(k) >= 0); }
+  function relicPrice(k) { return RELIC_PRICE[RELICS[k].tier]; }
+  function relicsOwned(s) {
+    return (s.relics || []).filter(function (k) { return !!RELICS[k]; }).map(function (k) { return RELICS[k]; });
+  }
+  function relicPool(s, minTier) {
+    return RELIC_KEYS.filter(function (k) { return RELICS[k].tier >= (minTier || 1) && !hasRelic(s, k); });
+  }
+  function rollRelic(s, minTier) {
+    var pool = relicPool(s, minTier || 1);
+    if (!pool.length && (minTier || 1) > 1) pool = relicPool(s, 1);
+    if (!pool.length) return null;
+    var w = RELIC_W[Math.min(C.SECTORS, s.sector)] || RELIC_W[1];
+    var tot = 0, i;
+    for (i = 0; i < pool.length; i++) tot += w[RELICS[pool[i]].tier - 1];
+    var r = R.f() * tot;
+    for (i = 0; i < pool.length; i++) { r -= w[RELICS[pool[i]].tier - 1]; if (r < 0) return pool[i]; }
+    return pool[pool.length - 1];
+  }
+  function addRelic(s, k) {
+    if (!RELICS[k]) return null;
+    if (!s.relics) s.relics = [];
+    if (s.relics.indexOf(k) < 0) s.relics.push(k);
+    return RELICS[k];
+  }
+  /* relic flags that the combat hooks read off a side object */
+  function relicCombat(s) {
+    return {
+      coil:      hasRelic(s, 'coil')    ? RELICS.coil.sec     : 0,
+      spike:     hasRelic(s, 'spike')   ? RELICS.spike.sec    : 0,
+      cascade:   hasRelic(s, 'cascade') ? RELICS.cascade.cd   : 0,
+      veil:      hasRelic(s, 'veil')    ? RELICS.veil.half    : 0,
+      veilCharge:hasRelic(s, 'veil')    ? RELICS.veil.charge  : 0,
+      prism:     hasRelic(s, 'prism')   ? RELICS.prism.pierce : 0
+    };
+  }
+
+  var NODES = {
+    fight:    { name: 'Enemy Contact',    hint: 'Combat, scrap as loot' },
+    elite:    { name: 'Elite Ship',       hint: 'Tough fight, guaranteed loot' },
+    event:    { name: 'Unknown Signal',   hint: 'Event with a choice' },
+    shop:     { name: 'Trading Post',     hint: 'Weapons, repairs, weapon slot' },
+    dock:     { name: 'Space Dock',       hint: '+12 hull free' },
+    guardian: { name: 'Sector Guardian',  hint: 'Guards the jump gate to the next sector' },
+    boss:     { name: 'Flagship Leviathan', hint: 'The last hurdle before Vega' }
+  };
+
+  var ENEMY_NAMES = {
+    1: ['Pirate Cutter', 'Scrap Collector', 'Smuggler Barge', 'Watch Drone', 'Rust Skiff', 'Claim Jumper'],
+    2: ['Mercenary Corvette', 'Syndicate Hunter', 'Bounty Hunter', 'Combat Drone', 'Picket Frigate', 'Debt Collector'],
+    3: ['Syndicate Frigate', 'Syndicate Cruiser', 'Hunting Squadron', 'Combat Drone Mk II', 'Siege Tender', 'Void Lamprey']
+  };
+  var ENEMY_POOLS = {
+    1: ['laser', 'laser', 'burst', 'ion', 'mining'],
+    2: ['laser', 'burst', 'heavy', 'ion', 'missile', 'mining', 'lance'],
+    3: ['burst', 'heavy', 'ion', 'missile', 'beam', 'flak', 'lance', 'ionburst']
+  };
+
+  // ---------- Helper functions: crew & stats ----------
+  function randomType() { return { role: R.pick(ROLE_KEYS), origin: R.pick(ORIGIN_KEYS) }; }
+
+  function makeCrew(s, role, origin, stars) {
+    var used = {};
+    s.crew.forEach(function (m) { used[m.name] = true; });
+    var pool = NAMES[origin].filter(function (n) { return !used[n]; });
+    var name = pool.length ? R.pick(pool) : R.pick(NAMES[origin]);
+    return { id: s.nextId++, role: role, origin: origin, stars: stars || 1, name: name };
+  }
+
+  function counts(s) {
+    var c = {};
+    s.crew.forEach(function (m) { c[m.role] = (c[m.role] || 0) + 1; c[m.origin] = (c[m.origin] || 0) + 1; });
+    return c;
+  }
+  function tierOf(cnt, key) { var n = cnt[key] || 0; return n >= 4 ? 2 : n >= 2 ? 1 : 0; }
+  function rockBonus(s) { var t = tierOf(counts(s), 'rock'); return t === 2 ? 20 : t === 1 ? 8 : 0; }
+  function maxHull(s) { return s.baseMaxHull + rockBonus(s); }
+  function syncHull(s) {
+    var b = rockBonus(s), d = b - s.rockApplied;
+    if (d > 0) s.hull += d;
+    s.rockApplied = b;
+    s.hull = Math.min(s.hull, maxHull(s));
+  }
+function derive(s) {
+
+    var cnt = counts(s);
+
+    var T = function (k) { return tierOf(cnt, k); };
+
+    var chargeMul = 1, shieldSpeed = 1, evasion = s.engineLv * 5, repairRate = 0;
+
+    s.crew.forEach(function (m) {
+
+      var v = ROLE_VAL[m.role][m.stars - 1];
+
+      if (m.role === 'gunner') chargeMul += v;
+
+      else if (m.role === 'pilot') evasion += v;
+
+      else if (m.role === 'tech') shieldSpeed += v;
+
+      else if (m.role === 'engineer') repairRate += 1 / v;
+
+    });
+
+    var tg = T('gunner'); chargeMul += tg === 2 ? 0.25 : tg === 1 ? 0.10 : 0;
+
+    var tp = T('pilot'); evasion += tp === 2 ? 18 : tp === 1 ? 8 : 0;
+
+    var tt = T('tech');
+
+    var shieldMax = s.shieldLv + (tt === 2 ? 2 : tt === 1 ? 1 : 0);
+
+    var te = T('engineer'); if (te === 2) repairRate *= 2;
+
+    var ts = T('spark');
+
+    var bonusShields = ts === 2 ? 5 : ts === 1 ? 3 : 0;
+
+    if (ts === 2) shieldSpeed += 0.25; else if (ts === 1) shieldSpeed += 0.1;
+
+    var tb = T('bug');
+
+    var boarding = tb === 2 ? { dmg: 2, every: 5 } : tb === 1 ? { dmg: 1, every: 7 } : null;
+
+    var th = T('human');
+
+    var startCharge = tg === 2 ? 0.5 : 0;
+
+    var repairAmt = 1;
+
+
+    // ---------- relics ----------
+
+    // Chorus Engine: the payoff for committing all four slots to one origin.
+
+    if (hasRelic(s, 'chorus')) {
+
+      var four = false;
+
+      ORIGIN_KEYS.forEach(function (k) { if (T(k) === 2) four = true; });
+
+      if (four) { chargeMul += RELICS.chorus.charge; shieldMax += RELICS.chorus.shield; }
+
+    }
+
+    // Hive Resonator: doubles the boarding synergy, and gives a floor without it.
+
+    if (hasRelic(s, 'hive')) {
+
+      var extra = Math.floor((cnt.bug || 0) / RELICS.hive.per);
+
+      if (boarding) boarding = { dmg: boarding.dmg * RELICS.hive.mul + extra, every: boarding.every };
+
+      else boarding = { dmg: 1 + extra, every: RELICS.hive.base };
+
+    }
+
+    // Weld Drone: doubles the repair tick, and bootstraps one if there is no engineer.
+
+    if (hasRelic(s, 'welder')) {
+
+      repairAmt = RELICS.welder.amt;
+
+      if (repairRate <= 0) repairRate = 1 / RELICS.welder.every;
+
+    }
+
+    // Hoard Reactor: pays you for walking into a fight rich.
+
+    if (hasRelic(s, 'reactor') && s.scrap >= RELICS.reactor.need) {
+
+      shieldMax += RELICS.reactor.shield;
+
+      if (startCharge < RELICS.reactor.start) startCharge = RELICS.reactor.start;
+
+    }
+
+
+    return {
+
+      chargeMul: chargeMul,
+
+      evasion: Math.min(evasion, C.EVASION_CAP),
+
+      shieldMax: shieldMax,
+
+      shieldRegen: C.SHIELD_REGEN / shieldSpeed,
+
+      bonusShields: bonusShields,
+
+      boarding: boarding,
+
+      repairEvery: repairRate > 0 ? 1 / repairRate : null,
+
+      startCharge: startCharge,
+
+      healAfter: te === 2 ? 8 : te === 1 ? 4 : 0,
+
+      scrapBonus: th === 2 ? 5 : th === 1 ? 2 : 0,
+
+      repairAmt: repairAmt,          // NEW
+
+      relic: relicCombat(s)          // NEW
+
+    };
+
+  }
+
+  function roleEffect(role, stars) {
+    var v = ROLE_VAL[role][stars - 1];
+    if (role === 'gunner') return 'Weapons +' + Math.round(v * 100) + '% charge speed';
+    if (role === 'pilot') return '+' + v + '% evasion';
+    if (role === 'tech') return 'Shields +' + Math.round(v * 100) + '% charge speed';
+    return '+1 hull every ' + String(v).replace('.', ',') + ' s in combat';
+  }
+
+  // ---------- Difficulty ----------
+  // Each rung bites in a different, readable way rather than just inflating
+  // enemy numbers: tougher hulls, then more elites on the map, then a leaner
+  // start, then pricier repairs. Unlocked one at a time by winning the one below.
+  var DIFFS = [
+    { lv: 0, name: 'Courier',   blurb: 'The intended run.',                       ehull: 1.00, eshield: 0, ewcBig: 0, elite: 0,  hull: 0,  scrap: 0,  repair: 0 },
+    { lv: 1, name: 'Hunted',    blurb: 'Tougher ships. More elites on the map.',  ehull: 1.10, eshield: 0, ewcBig: 0, elite: 6,  hull: 0,  scrap: -2, repair: 0 },
+    { lv: 2, name: 'Blockade',  blurb: 'Everything carries a shield. Pricier repairs.', ehull: 1.16, eshield: 1, ewcBig: 0, elite: 10, hull: -2, scrap: -3, repair: 1 },
+    { lv: 3, name: 'Purge',     blurb: 'Elites and guardians gain a gun.',        ehull: 1.22, eshield: 1, ewcBig: 1, elite: 14, hull: -4, scrap: -4, repair: 2 },
+    { lv: 4, name: 'Nightfall', blurb: 'Everything, all at once.',                ehull: 1.30, eshield: 2, ewcBig: 1, elite: 18, hull: -6, scrap: -6, repair: 3 }
+  ];
+  function diffOf(s) { return DIFFS[(s && s.diff) || 0] || DIFFS[0]; }
+  function repairPrice(s) { return C.REPAIR_PRICE + diffOf(s).repair; }
+
+  // ---------- New run ----------
+function newRun(diff) {
+    var D = DIFFS[diff] || DIFFS[0];
+    var s = {
+      v: 1,
+      diff: D.lv,
+      sector: 1, jump: 0,
+      hull: C.START_HULL + D.hull, baseMaxHull: C.START_HULL + D.hull, rockApplied: 0,
+      shieldLv: 1, engineLv: 1,
+      weapons: ['burst', 'laser'], slots: 3,
+      crew: [], cap: 4,
+      scrap: 10 + D.scrap,
+      relics: [],                    // NEW - array of RELICS keys, JSON-safe
+      shop: [], beacons: [],
+      node: null,
+      usedEvents: [],
+      stats: { wins: 0, fled: 0, scrap: 0, jumps: 0 },
+      nextId: 1,
+      dead: false, won: false
+    };
+    var roles = R.shuffle(ROLE_KEYS), origins = R.shuffle(ORIGIN_KEYS);
+    s.crew.push(makeCrew(s, roles[0], origins[0]));
+    s.crew.push(makeCrew(s, roles[1], origins[1]));
+    rollShop(s);
+    s.beacons = genBeacons(s);
+    return s;
+  }
+
+  // ---------- Recruiting (TFT shop) ----------
+  function rollShop(s) {
+    s.shop = [];
+    for (var i = 0; i < 5; i++) { var t = randomType(); s.shop.push({ role: t.role, origin: t.origin, sold: false }); }
+  }
+  function copies(s, role, origin, stars) {
+    return s.crew.filter(function (m) { return m.role === role && m.origin === origin && m.stars === stars; }).length;
+  }
+  function canRecruit(s, role, origin) {
+    return s.crew.length < s.cap || copies(s, role, origin, 1) >= 2;
+  }
+  function wouldMerge(s, role, origin) { return copies(s, role, origin, 1) >= 2; }
+  function mergeCheck(s, role, origin) {
+    var result = null;
+    for (var st = 1; st <= 2; st++) {
+      var same = s.crew.filter(function (m) { return m.role === role && m.origin === origin && m.stars === st; });
+      if (same.length >= 3) {
+        var keep = same[0];
+        var drop = {}; drop[same[1].id] = true; drop[same[2].id] = true;
+        s.crew = s.crew.filter(function (m) { return !drop[m.id]; });
+        keep.stars = st + 1;
+        result = keep;
+      }
+    }
+    return result;
+  }
+  function addCrew(s, role, origin) {
+    var m = makeCrew(s, role, origin, 1);
+    s.crew.push(m);
+    var merged = mergeCheck(s, role, origin);
+    syncHull(s);
+    return { member: merged || m, merged: !!merged };
+  }
+  function buyCrew(s, idx) {
+    var o = s.shop[idx];
+    if (!o || o.sold || s.scrap < C.CREW_PRICE || !canRecruit(s, o.role, o.origin)) return null;
+    s.scrap -= C.CREW_PRICE;
+    o.sold = true;
+    return addCrew(s, o.role, o.origin);
+  }
+  function sellCrew(s, id) {
+    if (s.crew.length <= 1) return 0;
+    var m = s.crew.filter(function (x) { return x.id === id; })[0];
+    if (!m) return 0;
+    s.crew = s.crew.filter(function (x) { return x.id !== id; });
+    var v = C.SELL[m.stars - 1];
+    s.scrap += v;
+    syncHull(s);
+    return v;
+  }
+  function reroll(s) {
+    if (s.scrap < C.REROLL_PRICE) return false;
+    s.scrap -= C.REROLL_PRICE;
+    rollShop(s);
+    return true;
+  }
+
+  // ---------- Upgrades ----------
+  function upgradeCost(s, what) {
+    if (what === 'shield') return s.shieldLv < 4 ? C.SHIELD_COST[s.shieldLv + 1] : null;
+    if (what === 'engine') return s.engineLv < 6 ? C.ENGINE_COST[s.engineLv + 1] : null;
+    if (what === 'cap') return s.cap < 8 ? C.CAP_COST[s.cap + 1] : null;
+    return null;
+  }
+  function upgrade(s, what) {
+    var cost = upgradeCost(s, what);
+    if (cost == null || s.scrap < cost) return false;
+    s.scrap -= cost;
+    if (what === 'shield') s.shieldLv++;
+    else if (what === 'engine') s.engineLv++;
+    else if (what === 'cap') s.cap++;
+    return true;
+  }
+
+  // ---------- Weapons ----------
+  function weaponValue(k) { return Math.floor(WEAPONS[k].price / 2); }
+  function sellWeapon(s, idx) {
+    if (s.weapons.length <= 1 || !s.weapons[idx]) return 0;
+    var k = s.weapons.splice(idx, 1)[0];
+    var v = weaponValue(k);
+    s.scrap += v;
+    return v;
+  }
+  function replaceWeapon(s, idx, k) {
+    var old = s.weapons[idx];
+    if (!old) return 0;
+    s.weapons[idx] = k;
+    var v = weaponValue(old);
+    s.scrap += v;
+    return v;
+  }
+  function giveWeapon(s, k) {
+    if (s.weapons.length < s.slots) { s.weapons.push(k); return true; }
+    return false;
+  }
+
+  // ---------- Star map ----------
+  function genBeacons(s) {
+    if (s.jump >= C.SECTOR_LEN) return [{ type: s.sector >= C.SECTORS ? 'boss' : 'guardian' }];
+    var w = { fight: 40, event: 28, shop: 12, dock: 8, elite: (s.sector > 1 || s.jump >= 2) ? 12 + diffOf(s).elite : 0 };
+    if (s.jump === 0) w.dock = 0;
+    var n = R.chance(0.55) ? 3 : 2;
+    var out = [];
+    function pickType() {
+      var entries = Object.keys(w).filter(function (t) { return w[t] > 0 && !out.some(function (o) { return o.type === t; }); });
+      var tot = entries.reduce(function (a, t) { return a + w[t]; }, 0);
+      var r = R.f() * tot;
+      for (var i = 0; i < entries.length; i++) { r -= w[entries[i]]; if (r < 0) return entries[i]; }
+      return entries[entries.length - 1];
+    }
+    for (var i = 0; i < n; i++) out.push({ type: pickType() });
+    if (s.jump === 2 && !out.some(function (o) { return o.type === 'shop'; })) out[out.length - 1] = { type: 'shop' };
+    if (!out.some(function (o) { return o.type !== 'elite'; })) out.push({ type: 'fight' });
+    return out;
+  }
+  function interest(s) { return Math.min(C.INTEREST_MAX, Math.floor(s.scrap / C.INTEREST_STEP)); }
+  function jumpTo(s, i) {
+    var b = s.beacons[i];
+    if (!b) return null;
+    var gain = interest(s);
+    s.scrap += gain; s.stats.scrap += gain;
+    s.jump++; s.stats.jumps++;
+    rollShop(s);
+    s.node = { type: b.type };
+    return { type: b.type, interest: gain };
+  }
+  function afterNode(s) {
+    var sectorUp = false;
+    if (s.node && s.node.type === 'guardian') { s.sector++; s.jump = 0; sectorUp = true; }
+    s.node = null;
+    s.beacons = genBeacons(s);
+    return sectorUp;
+  }
+  function dock(s) { var before = s.hull; s.hull = Math.min(maxHull(s), s.hull + C.DOCK_HEAL); return s.hull - before; }
+
+  // ---------- Enemies ----------
+  function makeEnemy(s, type) {
+    var sec = s.sector;
+    var n = (sec - 1) * (C.SECTOR_LEN + 1) + s.jump;   // 1 … 18
+    var D = diffOf(s);
+    var hull = Math.round(7 + n * 1.5 + R.int(0, 3));
+    var shields = sec === 1 ? (R.chance(0.4) ? 1 : 0) : sec === 2 ? (R.chance(0.5) ? 2 : 1) : (R.chance(0.45) ? 3 : 2);
+    var evasion = R.int(0, 4 + sec * 4);
+    var wc = sec === 1 ? (s.jump <= 2 ? R.int(1, 2) : 2) : sec === 2 ? 2 : R.int(2, 3);
+    var chargeMul = [0, 1.0, 1.1, 1.18][sec];
+    var boarding = null, repairEvery = null;
+    var name = R.pick(ENEMY_NAMES[sec]);
+    var weapons = [];
+    if (type === 'elite') {
+      hull = Math.round(hull * 1.35); shields += 1; wc += 1 + (sec >= 2 ? D.ewcBig : 0); name = 'Elite ' + name;
+      if (sec >= 2) boarding = { dmg: 1, every: 9 };
+    }
+    if (type === 'guardian') {
+      hull = Math.round(hull * 1.5) + 4; shields += 1; wc += 1 + (sec >= 2 ? D.ewcBig : 0); repairEvery = 12;
+      name = sec === 1 ? 'Customs Cruiser Aldebaran' : 'Blockade Ship Rigel';
+    }
+    var veteran = false;
+    if (type === 'fight' && (sec > 1 || s.jump >= 2) && R.chance(0.18)) {
+      veteran = true;
+      hull = Math.round(hull * 1.15) + 2;
+      wc += 1;
+      name = 'Veteran ' + name;
+    }
+    for (var i = 0; i < wc; i++) weapons.push(R.pick(ENEMY_POOLS[sec]));
+    if (weapons.every(function (k) { return k === 'ion'; })) weapons[0] = 'laser';
+    if (type === 'boss') {
+      name = 'Flagship Leviathan';
+      hull = 52; shields = 3; evasion = 10; chargeMul = 0.85;
+      weapons = ['flak', 'missile', 'heavy', 'ion'];
+      boarding = { dmg: 1, every: 9 }; repairEvery = 12;
+    }
+    // Difficulty scaling is applied last so it also reaches the elite, guardian
+    // and boss branches above, which overwrite their own hull and shield values.
+    // It ramps in by sector: applying the full penalty in sector 1 made the first
+    // guardian — mandatory and un-fleeable — an instant wall, which is where
+    // ~90% of high-tier runs were dying before the player had any tools.
+    var ramp = sec === 1 ? 0.4 : sec === 2 ? 0.75 : 1;
+    hull = Math.round(hull * (1 + (D.ehull - 1) * ramp));
+    shields += sec === 1 ? 0 : Math.round(D.eshield * ramp);
+    return { name: name, hull: hull, maxHull: hull, shieldMax: shields, shieldRegen: C.SHIELD_REGEN, evasion: evasion, weapons: weapons, chargeMul: chargeMul, boarding: boarding, repairEvery: repairEvery, bonusShields: 0, startCharge: 0, veteran: veteran };
+  }
+
+  // ---------- Combat ----------
+function side(cfg) {
+    return {
+      name: cfg.name,
+      hull: cfg.hull, maxHull: cfg.maxHull,
+      shields: cfg.shieldMax, shieldMax: cfg.shieldMax, shieldProg: 0, shieldLock: 0, shieldRegen: cfg.shieldRegen,
+      bonus: cfg.bonusShields || 0, bonusMax: cfg.bonusShields || 0, bonusProg: 0,
+      evasion: cfg.evasion / 100,
+      chargeMul: cfg.chargeMul,
+      w: cfg.weapons.map(function (k) { return { k: k, p: cfg.startCharge || 0, jam: 0 }; }),   // NEW jam
+      boarding: cfg.boarding, boardT: 0,
+      repairEvery: cfg.repairEvery, repairT: 0, veteran: cfg.veteran || false,
+      repairAmt: cfg.repairAmt || 1,          // NEW
+      rel: cfg.rel || null, casCD: 0          // NEW
+    };
+  }
+function startCombat(s, type, opts) {
+    opts = opts || {};
+    syncHull(s);
+    var d = derive(s);
+    var p = side({
+      name: 'Albatros', hull: s.hull, maxHull: maxHull(s),
+      shieldMax: d.shieldMax, shieldRegen: d.shieldRegen, bonusShields: d.bonusShields,
+      evasion: d.evasion, chargeMul: d.chargeMul, weapons: s.weapons, startCharge: d.startCharge,
+      boarding: d.boarding, repairEvery: d.repairEvery,
+      repairAmt: d.repairAmt, rel: d.relic                 // NEW
+    });
+    var e = side(makeEnemy(s, type));
+    return {
+      type: type, p: p, e: e, t: 0, shots: [], fx: [], over: false, winner: null,
+      flee: 0, canFlee: type === 'fight' || type === 'elite',
+      bonusScrap: opts.bonusScrap || 0, nextShot: 1,
+      dealt: 0                                             // NEW - total damage dealt (Salvage Lathe)
+    };
+  }
+  function fx(c, key, kind, amt) { c.fx.push({ key: key, kind: kind, amt: amt, t: c.t }); }
+function damage(c, t, key, amt, why) {
+    t.hull -= amt;
+    if (key === 'e') c.dealt = (c.dealt || 0) + amt;        // NEW - counts overkill too
+    fx(c, key, why, amt);
+  }
+  function dodged(c, t) {
+    var g = t.rel && t.rel.veilCharge;
+    if (!g) return;
+    for (var i = 0; i < t.w.length; i++) t.w[i].p += g;
+  }
+  function shieldBroke(c, t, key) {
+    var cd = t.rel && t.rel.cascade;
+    if (!cd || t.casCD > 0 || t.hull <= 0) return;
+    var best = null, i;
+    for (i = 0; i < t.w.length; i++) { if (t.w[i].jam > 0) continue; if (!best || t.w[i].p > best.p) best = t.w[i]; }
+    if (!best) return;
+    t.casCD = cd;
+    best.p = 0;
+    fire(c, key, best.k);
+    fx(c, key, 'salvo', 0);
+  }
+  function jamWeapon(c, t, key, sec) {
+    var open = [], i;
+    for (i = 0; i < t.w.length; i++) if (t.w[i].jam <= 0) open.push(t.w[i]);
+    if (!open.length) return;
+    R.pick(open).jam = sec;
+    fx(c, key, 'ionw', 0);
+  }
+function fire(c, who, k) {
+    var W = WEAPONS[k];
+    var rel = c[who].rel || {};
+    var shots = W.shots;
+    if (W.kind === 'beam' && rel.prism) shots *= 2;        // Prism Lens
+    for (var i = 0; i < shots; i++) {
+      var travel = W.kind === 'beam' ? 0.35 + i * 0.25 : 0.8 + i * 0.14;
+      c.shots.push({ id: c.nextShot++, from: who, k: k, kind: W.kind, dmg: W.dmg, left: travel, travel: travel, x: 15 + R.f() * 70 });
+    }
+  }
+function land(c, sh) {
+    var key = sh.from === 'p' ? 'e' : 'p';
+    var t = c[key], src = c[sh.from];
+    var sr = src.rel || {}, tr = t.rel || {};
+    if (t.hull <= 0) return;
+    if (sh.kind === 'beam') {
+      if (tr.veil && R.f() < t.evasion * tr.veil) { fx(c, key, 'miss', 0); dodged(c, t); return; }   // Phase Veil
+      var block = t.shields + t.bonus - (sr.prism || 0);                                             // Prism Lens
+      if (block < 0) block = 0;
+      var dmg = Math.max(0, sh.dmg - block);
+      if (dmg > 0) damage(c, t, key, dmg, 'beam'); else fx(c, key, 'block', 0);
+      return;
+    }
+    if (R.f() < t.evasion) { fx(c, key, 'miss', 0); dodged(c, t); return; }
+    if (sh.kind === 'missile') { damage(c, t, key, sh.dmg, 'missile'); return; }
+    if (sh.kind === 'ion') {
+      // Ion Spike rides the shield discharge into the weapon grid, so it only
+      // fires when the ion actually strips a layer. That caps stacked ion cannons:
+      // the second ion usually lands on an already-bare target and does nothing.
+      if (t.bonus > 0) { t.bonus--; fx(c, key, 'ion', 0); shieldBroke(c, t, key); if (sr.spike) jamWeapon(c, t, key, sr.spike); }
+      else if (t.shields > 0) { t.shields--; t.shieldLock = 3; fx(c, key, 'ion', 0); shieldBroke(c, t, key); if (sr.spike) jamWeapon(c, t, key, sr.spike); }
+      else { t.w.forEach(function (w) { w.p = Math.max(0, w.p - 0.2); }); fx(c, key, 'ionw', 0); }
+      return;
+    }
+    if (t.bonus > 0) { t.bonus--; fx(c, key, 'block', 0); shieldBroke(c, t, key); return; }
+    if (t.shields > 0) { t.shields--; fx(c, key, 'block', 0); shieldBroke(c, t, key); return; }
+    damage(c, t, key, sh.dmg, 'hit');
+  }
+function tickSide(c, a, b, who, dt) {
+    var rel = a.rel || {}, heat = heatFactor(c);
+    if (a.casCD > 0) a.casCD = Math.max(0, a.casCD - dt);
+    if (a.shieldLock > 0) a.shieldLock = Math.max(0, a.shieldLock - dt);
+    else if (a.shields < a.shieldMax) {
+      var regen = (rel.coil && a.shields === 0) ? rel.coil : a.shieldRegen;    // Coil Spring
+      a.shieldProg += dt / (regen * heat);
+      if (a.shieldProg >= 1) { a.shieldProg = 0; a.shields++; }
+    } else a.shieldProg = 0;
+    if (a.bonus < a.bonusMax) {
+      a.bonusProg += dt / (a.shieldRegen * 4 * heat);
+      if (a.bonusProg >= 1) { a.bonusProg = 0; a.bonus++; }
+    } else a.bonusProg = 0;
+    for (var i = 0; i < a.w.length; i++) {
+      var w = a.w[i];
+      if (w.jam > 0) { w.jam = Math.max(0, w.jam - dt); continue; }            // Ion Spike
+      w.p += dt * a.chargeMul / WEAPONS[w.k].charge;
+      if (w.p >= 1) { w.p -= 1; fire(c, who, w.k); }
+    }
+    var other = who === 'p' ? 'e' : 'p';
+    if (a.boarding) {
+      a.boardT += dt;
+      if (a.boardT >= a.boarding.every) { a.boardT -= a.boarding.every; if (b.hull > 0) damage(c, b, other, a.boarding.dmg, 'board'); }
+    }
+    if (a.repairEvery) {
+      a.repairT += dt / heat;
+      if (a.repairT >= a.repairEvery) {
+        a.repairT -= a.repairEvery;
+        var amt = Math.min(a.repairAmt || 1, a.maxHull - a.hull);              // Weld Drone
+        if (a.hull > 0 && amt > 0) { a.hull += amt; fx(c, who, 'repair', amt); }
+      }
+    }
+  }
+  function heatFactor(c) { return c.t > C.HEAT_START ? 1 + (c.t - C.HEAT_START) / C.HEAT_RAMP : 1; }
+  function stepCombat(c, dt) {
+    if (c.over) return;
+    c.t += dt;
+    if (c.t > C.BREAKDOWN) {
+      c.breakT = (c.breakT || 0) + dt;
+      if (c.breakT >= 2) { c.breakT -= 2; damage(c, c.e, 'e', 1, 'board'); damage(c, c.p, 'p', 1, 'board'); }
+    }
+    tickSide(c, c.p, c.e, 'p', dt);
+    tickSide(c, c.e, c.p, 'e', dt);
+    var landed = [];
+    c.shots = c.shots.filter(function (sh) { sh.left -= dt; if (sh.left <= 0) { landed.push(sh); return false; } return true; });
+    landed.forEach(function (sh) { land(c, sh); });
+    if (c.canFlee) c.flee = Math.min(1, c.flee + dt / C.FLEE_CHARGE);
+    if (c.e.hull <= 0) { c.e.hull = 0; c.over = true; c.winner = 'p'; }
+    else if (c.p.hull <= 0) { c.p.hull = 0; c.over = true; c.winner = 'e'; }
+  }
+  function flee(c) {
+    if (!c.canFlee || c.flee < 1 || c.over) return false;
+    c.over = true; c.winner = 'fled';
+    return true;
+  }
+function endCombat(s, c) {
+    s.hull = Math.max(0, Math.min(c.p.hull, maxHull(s)));
+    if (c.winner === 'e') { s.dead = true; return { dead: true }; }
+    if (c.winner === 'fled') { s.stats.fled++; return { fled: true, scrap: 0, healed: 0, loot: null }; }
+    s.stats.wins++;
+    var d = derive(s), sec = s.sector, scrap = 0;
+    if (c.type === 'fight') scrap = 6 + sec * 2 + R.int(0, 3);
+    if (c.type === 'fight' && c.e.veteran) scrap += 4 + sec;
+    else if (c.type === 'elite') scrap = Math.round((6 + sec * 2 + R.int(0, 3)) * 1.7);
+    else if (c.type === 'guardian') scrap = 18 + sec * 4;
+    if (c.type !== 'boss') {
+      scrap += d.scrapBonus + c.bonusScrap;
+      if (hasRelic(s, 'lathe') && c.dealt) scrap += Math.floor(c.dealt / RELICS.lathe.per);               // Salvage Lathe
+      if (hasRelic(s, 'ledger')) scrap += Math.min(RELICS.ledger.cap, Math.floor(s.scrap * RELICS.ledger.rate)); // Syndicate Ledger
+    }
+    s.scrap += scrap; s.stats.scrap += scrap;
+    var before = s.hull;
+    s.hull = Math.min(maxHull(s), s.hull + d.healAfter);
+    var loot = null;
+    if (c.type === 'elite' || c.type === 'guardian' || (c.type === 'fight' && R.chance(0.3))) loot = makeLoot(s, c.type);
+    if (c.type === 'boss') s.won = true;
+    return { scrap: scrap, healed: s.hull - before, loot: loot, boss: c.type === 'boss' };
+  }
+
+  // ---------- Loot ----------
+function makeLoot(s, type) {
+    var sec = s.sector;
+    var LPOOLS = {
+      1: ['laser', 'burst', 'heavy', 'ion', 'missile', 'mining', 'lance'],
+      2: ['burst', 'heavy', 'ion', 'missile', 'beam', 'flak', 'lance', 'ionburst', 'buckshot'],
+      3: ['heavy', 'ion', 'missile', 'beam', 'flak', 'ionburst', 'buckshot', 'rail', 'swarm']
+    };
+    var wPool = LPOOLS[sec] || LPOOLS[3];
+    var t = randomType();
+    var opts = [{ kind: 'weapon', k: R.pick(wPool) }, { kind: 'crew', role: t.role, origin: t.origin }];
+    if (type !== 'fight') opts.push(R.chance(0.5) ? { kind: 'scrap', amount: 10 + sec * 3 } : { kind: 'hull', amount: 10 });
+    // Relic offers: guaranteed after a guardian (tier 2+), likely after an elite, rare after a skirmish.
+    var wantRelic = type === 'guardian' || type === 'boss' ||
+      (type === 'elite' && R.chance(0.6)) || (type === 'fight' && R.chance(0.22));
+    if (wantRelic) {
+      var rk = rollRelic(s, type === 'guardian' || type === 'boss' ? 2 : 1);
+      if (rk) opts.push({ kind: 'relic', k: rk });
+    }
+    if (hasRelic(s, 'blackbox')) {                                     // Black Box
+      var x = randomType();
+      opts.push(R.chance(0.5) ? { kind: 'scrap', amount: 8 + sec * 3 } : { kind: 'crew', role: x.role, origin: x.origin });
+    }
+    return opts;
+  }
+function takeLoot(s, o) {
+    if (o.kind === 'weapon') return giveWeapon(s, o.k) ? { ok: true } : { replace: o.k };
+    if (o.kind === 'crew') {
+      if (!canRecruit(s, o.role, o.origin)) return { full: true };
+      var r = addCrew(s, o.role, o.origin);
+      return { ok: true, member: r.member, merged: r.merged };
+    }
+    if (o.kind === 'scrap') { s.scrap += o.amount; s.stats.scrap += o.amount; return { ok: true }; }
+    if (o.kind === 'hull') { s.hull = Math.min(maxHull(s), s.hull + o.amount); return { ok: true }; }
+    if (o.kind === 'relic') { return { ok: true, relic: addRelic(s, o.k) }; }     // NEW
+    return { ok: false };
+  }
+
+  // ---------- Trading post ----------
+function makeStore(s) {
+    var POOLS = {
+      1: ['laser', 'burst', 'heavy', 'ion', 'missile', 'beam', 'mining', 'lance'],
+      2: ['burst', 'heavy', 'ion', 'missile', 'beam', 'flak', 'mining', 'lance', 'ionburst', 'buckshot'],
+      3: ['heavy', 'ion', 'missile', 'beam', 'flak', 'lance', 'ionburst', 'buckshot', 'rail', 'swarm']
+    };
+    var pool = POOLS[s.sector] || POOLS[3];
+    var n = hasRelic(s, 'blackbox') ? 4 : 3;                                      // Black Box
+    var st = {
+      offers: R.shuffle(pool).slice(0, n).map(function (k) { return { k: k, sold: false, price: WEAPONS[k].price }; }),
+      relic: null
+    };
+    if (R.chance(0.6)) {
+      var rk = rollRelic(s, 1);
+      if (rk) st.relic = { k: rk, sold: false, price: relicPrice(rk) };
+    }
+    return st;
+  }
+  function storeBuy(s, st, i) {
+    var o = st.offers[i];
+    if (!o || o.sold || s.scrap < o.price) return null;
+    s.scrap -= o.price; o.sold = true;
+    return giveWeapon(s, o.k) ? { ok: true } : { replace: o.k, refund: o.price };
+  }
+  function storeBuyRelic(s, st) {
+    var o = st.relic;
+    if (!o || o.sold || s.scrap < o.price) return null;
+    s.scrap -= o.price; o.sold = true;
+    return { ok: true, relic: addRelic(s, o.k) };
+  }
+  function repair(s) {
+    if (s.scrap < repairPrice(s) || s.hull >= maxHull(s)) return false;
+    s.scrap -= repairPrice(s);
+    s.hull = Math.min(maxHull(s), s.hull + C.REPAIR_AMOUNT);
+    return true;
+  }
+  function buySlot(s) {
+    if (s.slots >= 4 || s.scrap < C.SLOT_COST) return false;
+    s.scrap -= C.SLOT_COST; s.slots++;
+    return true;
+  }
+
+  // ---------- Events ----------
+  function gainScrap(s, n) { s.scrap += n; s.stats.scrap += n; }
+  function hurt(s, n) { var before = s.hull; s.hull = Math.max(1, s.hull - n); return before - s.hull; }
+  function heal(s, n) { var before = s.hull; s.hull = Math.min(maxHull(s), s.hull + n); return s.hull - before; }
+  function typeLabel(t) { return ROLES[t.role].name + ' · ' + ORIGINS[t.origin].name; }
+  function weaponFound(s, k, intro) {
+    if (giveWeapon(s, k)) return { text: intro + ' ' + WEAPONS[k].name + ' is now installed.' };
+    return { text: intro, replace: k };
+  }
+  function recruitText(r) {
+    var m = r.member;
+    if (r.merged) return m.name + ' merges with its kin and rises to ' + m.stars + ' stars.';
+    return m.name + ' (' + ROLES[m.role].name + ', ' + ORIGINS[m.origin].name + ') is on board.';
+  }
+
+  var EVENTS = [
+    { id: 'distress', title: 'Distress Call', text: 'A freighter is calling for help. A pirate boat is on its tail.',
+      choices: function () { return [
+        { label: 'Intervene', hint: 'Combat, then +6 scrap reward', run: function () { return { text: 'You set an intercept course. The pirates turn to face you.', combat: { type: 'fight', bonusScrap: 6 } }; } },
+        { label: 'Fly on', run: function () { return { text: 'You leave the freighter behind. The transmission cuts out.' }; } }
+      ]; } },
+    { id: 'wreck', title: 'Drifting Wreck', text: 'A burned-out wreck, its emergency lights still flickering.',
+      choices: function () { return [
+        { label: 'Search it', run: function (s) {
+          var r = R.f();
+          if (r < 0.55) { var g = R.int(8, 14); gainScrap(s, g); return { text: 'Spare parts lie in the cargo hold. +' + g + ' scrap.' }; }
+          if (r < 0.8) { var k = R.pick(['laser', 'burst', 'heavy', 'ion', 'missile']); return weaponFound(s, k, 'A mount holds an intact ' + WEAPONS[k].name + '.'); }
+          var d = hurt(s, 4); return { text: 'A booby trap! −' + d + ' hull.' };
+        } },
+        { label: 'Ignore it', run: function () { return { text: 'Some things are better left drifting.' }; } }
+      ]; } },
+    { id: 'asteroids', title: 'Asteroid Field', text: 'A dense field of ore chunks lies right on the course.',
+      choices: function () { return [
+        { label: 'Fly through and collect ore', hint: 'With 2 pilots, no damage', run: function (s) {
+          var g = R.int(6, 10); gainScrap(s, g);
+          if ((counts(s).pilot || 0) >= 2) return { text: 'Your pilots thread the needle. +' + g + ' scrap, not a scratch.' };
+          var d = hurt(s, R.int(2, 6)); return { text: 'A few chunks hit the hull. +' + g + ' scrap, −' + d + ' hull.' };
+        } },
+        { label: 'Go around', run: function () { return { text: 'The detour only costs time.' }; } }
+      ]; } },
+    { id: 'pod', title: 'Escape Pod', text: 'An escape pod drifts in space. Someone is knocking from inside.',
+      setup: function () { return { t: randomType() }; },
+      choices: function (s, ctx) { return [
+        { label: 'Take them aboard', hint: typeLabel(ctx.t), run: function (s) {
+          if (canRecruit(s, ctx.t.role, ctx.t.origin)) return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) };
+          gainScrap(s, 4); return { text: 'No room on board. The survivors give you 4 scrap and wait for the next freighter.' };
+        } },
+        { label: 'Fly on', run: function () { return { text: 'You hope someone else comes by.' }; } }
+      ]; } },
+    { id: 'crate', title: 'Flying Merchant', text: 'A merchant offers a sealed crate. Contents unknown.',
+      choices: function () { return [
+        { label: 'Buy the crate', cost: 6, req: function (s) { return s.scrap >= 6; }, run: function (s) {
+          s.scrap -= 6;
+          var r = R.f();
+          if (r < 0.4) { var k = R.pick(['heavy', 'missile', 'beam', 'flak']); return weaponFound(s, k, 'The crate holds a ' + WEAPONS[k].name + '!'); }
+          if (r < 0.7) { gainScrap(s, 14); return { text: 'The crate is full of components. +14 scrap.' }; }
+          return { text: 'The crate is empty. The merchant is already gone.' };
+        } },
+        { label: 'Decline', run: function () { return { text: 'You don’t trust the offer.' }; } }
+      ]; } },
+    { id: 'flare', title: 'Solar Flare', text: 'A solar storm is rolling toward you.',
+      choices: function () { return [
+        { label: 'Raise shields', hint: 'No damage at 3+ shield layers', run: function (s) {
+          if (derive(s).shieldMax >= 3) return { text: 'The shields crackle but hold. No damage.' };
+          var d = hurt(s, 4); return { text: 'The shields are too weak. −' + d + ' hull.' };
+        } },
+        { label: 'Full speed ahead', hint: '50 : 50', run: function (s) {
+          if (R.chance(0.5)) return { text: 'You narrowly escape.' };
+          var d = hurt(s, 6); return { text: 'The storm catches you. −' + d + ' hull.' };
+        } }
+      ]; } },
+    { id: 'smugglers', title: 'Smugglers', text: 'Smugglers are interested in your weaponry and pay well.',
+      choices: function (s) {
+        var list = [];
+        if (s.weapons.length > 1) {
+          s.weapons.forEach(function (k, i) {
+            var price = Math.round(WEAPONS[k].price * 1.5);
+            list.push({ label: 'Sell ' + WEAPONS[k].name, gain: price, run: function (s) {
+              var idx = s.weapons.indexOf(k);
+              if (idx < 0 || s.weapons.length <= 1) return { text: 'The deal falls through.' };
+              s.weapons.splice(idx, 1); gainScrap(s, price);
+              return { text: 'A handshake. +' + price + ' scrap.' };
+            } });
+          });
+        }
+        list.push({ label: 'Decline', run: function () { return { text: 'The smugglers move on.' }; } });
+        return list;
+      } },
+    { id: 'crystals', title: 'Crystal Nebula', text: 'A nebula full of floating crystals. Valuable, but sharp-edged.',
+      choices: function () { return [
+        { label: 'Harvest', hint: 'Crystallines on board help', run: function (s) {
+          if ((counts(s).rock || 0) >= 1) { gainScrap(s, 12); return { text: 'Your crystalline crew pries the chunks loose carefully. +12 scrap.' }; }
+          gainScrap(s, 5); var d = hurt(s, 2); return { text: '+5 scrap, −' + d + ' hull.' };
+        } },
+        { label: 'Fly on', run: function () { return { text: 'The crystals sparkle in your wake.' }; } }
+      ]; } },
+    { id: 'mercs', title: 'Mercenary', text: 'A mercenary offers her services.',
+      setup: function () { return { t: randomType() }; },
+      choices: function (s, ctx) { return [
+        { label: 'Hire', hint: typeLabel(ctx.t), cost: 5, req: function (s) { return s.scrap >= 5 && canRecruit(s, ctx.t.role, ctx.t.origin); }, why: 'No room on board', run: function (s) {
+          s.scrap -= 5; return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) };
+        } },
+        { label: 'Decline', run: function () { return { text: 'She shrugs and looks for another ship.' }; } }
+      ]; } },
+    { id: 'anomaly', title: 'Space Anomaly', text: 'A flickering anomaly distorts the stars.',
+      choices: function () { return [
+        { label: 'Fly into it', hint: 'Risky', run: function (s) {
+          var r = R.f();
+          if (r < 0.35 && s.engineLv < 6) { s.engineLv++; return { text: 'The anomaly overcharges your engine. Engine +1 level.' }; }
+          if (r < 0.7 && s.shieldLv < 4) { s.shieldLv++; return { text: 'The shield generators soak up energy. Shields +1 level.' }; }
+          var d = hurt(s, 5); return { text: 'The hull groans under the distortion. −' + d + ' hull.' };
+        } },
+        { label: 'Avoid it', run: function () { return { text: 'Better safe than sorry.' }; } }
+      ]; } },
+    { id: 'toll', title: 'Toll', text: 'Pirates block the course and demand 8 scrap.',
+      choices: function () { return [
+        { label: 'Pay', cost: 8, req: function (s) { return s.scrap >= 8; }, run: function (s) { s.scrap -= 8; return { text: 'The pirates let you pass.' }; } },
+        { label: 'Fight', hint: 'Combat, +3 scrap extra', run: function () { return { text: 'You charge the weapons.', combat: { type: 'fight', bonusScrap: 3 } }; } }
+      ]; } },
+    { id: 'drone', title: 'Repair Drone', text: 'An ownerless repair drone offers its services.',
+      choices: function () { return [
+        { label: 'Let it dock', run: function (s) { var h = heal(s, 8); return { text: h > 0 ? 'The drone patches your hull. +' + h + ' hull.' : 'The drone finds nothing to repair and polishes the windshield.' }; } },
+        { label: 'Decline', run: function () { return { text: 'The drone buzzes off.' }; } }
+      ]; } },
+    { id: 'hive', title: 'Insectoid Nest', text: 'An insectoid nest hums on an asteroid.',
+      setup: function () { return { role: R.pick(ROLE_KEYS) }; },
+      choices: function (s, ctx) { return [
+        { label: 'Negotiate', hint: 'Requires Insectoids on board', req: function (s) { return (counts(s).bug || 0) >= 1 && canRecruit(s, ctx.role, 'bug'); }, why: 'No insectoid on board or no room', run: function (s) {
+          return { text: recruitText(addCrew(s, ctx.role, 'bug')) + ' The nest sends you ' + (ctx.role === 'gunner' ? 'a gunner' : 'reinforcements') + '.' };
+        } },
+        { label: 'Attack', hint: 'Combat, +5 scrap extra', run: function () { return { text: 'The nest sends an armed ship.', combat: { type: 'fight', bonusScrap: 5 } }; } },
+        { label: 'Fly on', run: function () { return { text: 'The humming fades away.' }; } }
+      ]; } },
+    { id: 'station', title: 'Abandoned Station', text: 'A decommissioned research station. Its docking clamps hang open.',
+      choices: function () { return [
+        { label: 'Explore', run: function (s) {
+          if (R.chance(0.6)) { var g = R.int(10, 15); gainScrap(s, g); return { text: 'You find salvageable tech in the lab. +' + g + ' scrap.' }; }
+          var d = hurt(s, 5); return { text: 'Automated guns awaken. −' + d + ' hull.' };
+        } },
+        { label: 'Fly on', run: function () { return { text: 'The station stays dark.' }; } }
+      ]; } },
+    { id: 'guild', title: 'Engineers’ Guild', text: 'A guild offers an engine tune-up at a special price.',
+      choices: function () { return [
+        { label: 'Engine +1 level', cost: 5, req: function (s) { return s.scrap >= 5 && s.engineLv < 6; }, why: 'Engine already at maximum', run: function (s) { s.scrap -= 5; s.engineLv++; return { text: 'The engine purrs. Evasion +5%.' }; } },
+        { label: 'Decline', run: function () { return { text: 'Maybe next time.' }; } }
+      ]; } },
+  { id: 'stowaway', title: 'Stowaway', text: 'A heat signature turns up behind a cargo bulkhead that should be empty.',
+    setup: function (s) { return { t: randomType() }; },
+    choices: function (s, ctx) { return [
+      { label: 'Let them stay', hint: typeLabel(ctx.t), req: function (s) { return canRecruit(s, ctx.t.role, ctx.t.origin); }, why: 'No bunk free',
+        run: function (s) { return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) }; } },
+      { label: 'Report them for the reward', run: function (s) { var g = R.int(7, 12); gainScrap(s, g); return { text: 'The bounty clerk does not ask questions. +' + g + ' scrap.' }; } },
+      { label: 'Pretend you saw nothing', run: function () { return { text: 'You log the compartment as empty, same as the manifest says.' }; } }
+    ]; } },
+
+  { id: 'bounty', title: 'Bounty Board', text: 'A derelict relay still broadcasts an old bounty list. One hull signature on your scope matches a name on it.',
+    choices: function () { return [
+      { label: 'Run it down', hint: 'Elite fight, +8 scrap bounty', run: function () { return { text: 'You match the signature and come about.', combat: { type: 'elite', bonusScrap: 8 } }; } },
+      { label: 'Let it go', run: function () { return { text: 'The list is years out of date anyway.' }; } }
+    ]; } },
+
+  { id: 'hijack', title: 'Hijacked Freighter', text: 'A freighter squawks a hijack code on an open channel. Shapes move behind its cockpit glass.',
+    choices: function () { return [
+      { label: 'Storm it', hint: 'Fight, +5 scrap if you win', run: function () { return { text: 'You match velocity and breach.', combat: { type: 'fight', bonusScrap: 5 } }; } },
+      { label: 'Sell the hijack code to a rival crew', run: function (s) { var g = R.int(6, 10); gainScrap(s, g); return { text: 'Not your problem anymore. +' + g + ' scrap.' }; } },
+      { label: 'Warn it off and move on', run: function () { return { text: 'The freighter changes course, slowly.' }; } }
+    ]; } },
+
+  { id: 'debt', title: 'Debt Collectors', text: 'A collection drone pings your hull with a lien notice. Someone sold your flight plan to a creditor.',
+    choices: function () { return [
+      { label: 'Pay the lien', cost: 7, req: function (s) { return s.scrap >= 7; },
+        run: function (s) { s.scrap -= 7; return { text: 'The drone stamps the manifest and peels away.' }; } },
+      { label: 'Forge the maintenance log', hint: 'Needs an engineer aboard', req: function (s) { return (counts(s).engineer || 0) >= 1; }, why: 'No engineer aboard to forge the paperwork',
+        run: function () { return { text: 'Your engineer backdates three refits and signs a name that is not theirs. The drone buys it.' }; } },
+      { label: 'Shoot the drone down', hint: 'Fight, +4 scrap in parts', run: function () { return { text: 'The drone raises its shields and returns fire.', combat: { type: 'fight', bonusScrap: 4 } }; } }
+    ]; } },
+
+  { id: 'jammer', title: 'Jamming Buoy', text: 'A pirate buoy chokes the comm channels with static, the same trick they use to blind merchant convoys.',
+    choices: function () { return [
+      { label: 'Crack the override', hint: 'Free with 2+ technicians', run: function (s) {
+          var g = R.int(8, 12);
+          if ((counts(s).tech || 0) >= 2) { gainScrap(s, g); return { text: 'Your technicians read the lockout in seconds. The buoy hands over its cache. +' + g + ' scrap.' }; }
+          gainScrap(s, g);
+          var d = hurt(s, R.int(3, 6));
+          return { text: 'You force the override and trip a defense charge. +' + g + ' scrap, -' + d + ' hull.' };
+        } },
+      { label: 'Leave it broadcasting', run: function () { return { text: 'You route around the static.' }; } }
+    ]; } },
+
+  { id: 'debris', title: 'Debris Storm', text: 'A field of broken hull plating and ice tumbles across your bow, leftovers from some older fight.',
+    choices: function () { return [
+      { label: 'Fly through and salvage', hint: 'Safe with 2+ gunners', run: function (s) {
+          var g = R.int(7, 11);
+          gainScrap(s, g);
+          if ((counts(s).gunner || 0) >= 2) return { text: 'Your gunners blast a clean lane through the debris. +' + g + ' scrap.' };
+          var d = hurt(s, R.int(3, 6));
+          return { text: 'Shrapnel rattles the hull as you haul in scrap. +' + g + ' scrap, -' + d + ' hull.' };
+        } },
+      { label: 'Steer around', run: function () { return { text: 'You add ten slow minutes to the route and keep the hull intact.' }; } }
+    ]; } },
+
+  { id: 'overclock', title: 'Redline', text: 'Your engineer thinks the drive core can take more than the safety margin allows.',
+    choices: function () { return [
+      { label: 'Push it past redline', hint: '50/50 — engine +1 stage or hull damage', req: function (s) { return s.engineLv < 6; }, why: 'Engine already at maximum',
+        run: function (s) {
+          if (R.chance(0.5)) { s.engineLv++; return { text: 'The core screams and settles into a new, higher pitch. Engine +1 stage.' }; }
+          var d = hurt(s, R.int(5, 8));
+          return { text: 'A feedback spike slams through the conduits. -' + d + ' hull.' };
+        } },
+      { label: 'Leave the margin alone', run: function () { return { text: 'Some risks are not worth the paperwork.' }; } }
+    ]; } },
+
+  { id: 'capacitor', title: 'Salvaged Capacitor', text: 'A trader offers a scavenged shield capacitor, pulled from a hull nobody will name.',
+    choices: function () { return [
+      { label: 'Test-fit it', cost: 6, req: function (s) { return s.scrap >= 6 && s.shieldLv < 4; }, why: 'Shields already at maximum',
+        run: function (s) {
+          s.scrap -= 6;
+          if (R.chance(0.6)) { s.shieldLv++; return { text: 'It syncs with your grid on the first try. Shields +1 stage.' }; }
+          gainScrap(s, 3);
+          return { text: 'It arcs, smokes, and dies. You strip it for +3 scrap and call it even.' };
+        } },
+      { label: 'Pass', run: function () { return { text: 'The trader shrugs and packs it away.' }; } }
+    ]; } },
+
+  { id: 'vault', title: 'Sealed Vault', text: 'A derelict beacon marks a cargo vault, locked tight and still broadcasting a corporate seal.',
+    choices: function () { return [
+      { label: 'Force it open', cost: 8, req: function (s) { return s.scrap >= 8; },
+        run: function (s) {
+          s.scrap -= 8;
+          var r = R.f();
+          if (r < 0.15) {
+            var bonus = 8; gainScrap(s, bonus);
+            var k = R.pick(['heavy', 'missile', 'beam', 'flak']);
+            return weaponFound(s, k, 'Under the ration crates sits a crated ' + WEAPONS[k].name + ', plus ' + bonus + ' loose scrap.');
+          }
+          if (r < 0.7) { var g = R.int(10, 16); gainScrap(s, g); return { text: 'The seal gives way to a hold full of parts. +' + g + ' scrap.' }; }
+          return { text: 'Empty. Someone beat you to it.' };
+        } },
+      { label: 'Bypass the lock', hint: 'Free with 2+ technicians', req: function (s) { return (counts(s).tech || 0) >= 2; }, why: 'Needs 2 technicians to read the lock',
+        run: function (s) { var g = R.int(8, 12); gainScrap(s, g); return { text: 'Your technicians walk the lock back through its own handshake. +' + g + ' scrap.' }; } },
+      { label: 'Leave it sealed', run: function () { return { text: 'Whatever is inside is not worth a hull breach.' }; } }
+    ]; } },
+
+  { id: 'choir', title: 'Spark Choir', text: 'A cluster of drifting energy motes pulses in slow rhythm with your reactor hum.',
+    setup: function () { return { role: R.pick(ROLE_KEYS) }; },
+    choices: function (s, ctx) { return [
+      { label: 'Reach out', hint: 'Joins for free if a spark is already aboard', run: function (s) {
+          if ((counts(s).spark || 0) >= 1 && canRecruit(s, ctx.role, 'spark')) return { text: recruitText(addCrew(s, ctx.role, 'spark')) };
+          var g = R.int(5, 9); gainScrap(s, g);
+          return { text: 'The motes dim and scatter, leaving charged residue behind. +' + g + ' scrap.' };
+        } },
+      { label: 'Let them drift on', run: function () { return { text: 'The hum fades behind you.' }; } }
+    ]; } },
+
+  { id: 'armory', title: 'Sealed Armory', text: 'A listening beacon marks a weapons cache, locked to a code that expired years ago.',
+    choices: function () { return [
+      { label: 'Cut it open', run: function (s) {
+          if (R.chance(0.75)) { var k = R.pick(['laser', 'burst', 'heavy', 'ion', 'missile']); return weaponFound(s, k, 'Inside sits a crated ' + WEAPONS[k].name + ', still in its packing foam.'); }
+          var d = hurt(s, R.int(4, 7));
+          return { text: 'The seal was wired to a charge. -' + d + ' hull.' };
+        } },
+      { label: 'Leave it sealed', run: function () { return { text: 'Expired codes make good booby traps. You leave it be.' }; } }
+    ]; } },
+
+  { id: 'bay', title: 'Cargo Bay Refit', text: 'Dock workers at a half-abandoned yard offer to carve out another weapon mount, cash not required.',
+    choices: function () { return [
+      { label: 'Let them weld through the hull', hint: 'Costs hull, not scrap', req: function (s) { return s.slots < 4; }, why: 'No room left for another mount',
+        run: function (s) { var d = hurt(s, R.int(4, 7)); s.slots++; return { text: 'Sparks fly for an hour and a new mount scars the plating. -' + d + ' hull, +1 weapon slot.' }; } },
+      { label: 'Decline', run: function () { return { text: 'Your hull stays in one piece.' }; } }
+    ]; } },
+
+  { id: 'bazaar', title: 'Floating Bazaar', text: 'A ragtag flotilla has strung market stalls between docked hulls. A dealer waves you toward a weapon rack.',
+    setup: function () { return { k: R.pick(['laser', 'burst', 'heavy', 'ion', 'missile', 'beam']) }; },
+    choices: function (s, ctx) {
+      var discount = (counts(s).human || 0) >= 1;
+      var price = Math.max(3, WEAPONS[ctx.k].price - (discount ? 2 : 0));
+      return [
+        { label: 'Buy the ' + WEAPONS[ctx.k].name, hint: discount ? 'Haggled price' : '', cost: price, req: function (s) { return s.scrap >= price; },
+          run: function (s) { s.scrap -= price; return weaponFound(s, ctx.k, 'The dealer hands over a ' + WEAPONS[ctx.k].name + '.'); } },
+        { label: 'Walk past', run: function () { return { text: 'You keep your scrap and your hull plating.' }; } }
+      ];
+    } },
+
+  { id: 'den', title: 'Gambling Den', text: 'A makeshift den runs dice games off a docked hab-ring. The house always seems to win, but tonight might be different.',
+    choices: function () { return [
+      { label: 'Wager 10 scrap', cost: 10, req: function (s) { return s.scrap >= 10; },
+        run: function (s) {
+          s.scrap -= 10;
+          if (R.chance(0.48)) { gainScrap(s, 20); return { text: 'The dice favor you, for once. +20 scrap.' }; }
+          return { text: 'The house wins again. Your scrap is already gone.' };
+        } },
+      { label: 'Watch from the bar', run: function () { return { text: 'You nurse a drink while a Syndicate ensign loses badly at the next table.' }; } }
+    ]; } },
+  { id: 'relicvault', title: 'Sealed Vault', text: 'A derelict survey ship drifts past with its cargo vault still sealed. The lock is syndicate work.',
+    setup: function (s) { return { k: rollRelic(s, 1) }; },
+    choices: function (s, ctx) { return [
+      { label: 'Cut the vault open', hint: ctx.k ? RELICS[ctx.k].name : 'Nothing left in there', cost: 4,
+        req: function (s) { return s.scrap >= 4 && !!ctx.k; },
+        why: ctx.k ? 'Not enough scrap' : 'The vault is already stripped',
+        run: function (s) {
+          s.scrap -= 4; addRelic(s, ctx.k);
+          return { text: 'The seal gives way. ' + RELICS[ctx.k].name + ' is bolted to the Albatross. ' + RELICS[ctx.k].desc };
+        } },
+      { label: 'Strip the hull instead', hint: '+12 scrap',
+        run: function (s) { gainScrap(s, 12); return { text: 'You cut loose everything within reach. +12 scrap.' }; } },
+      { label: 'Fly on', run: function () { return { text: 'Some locks are not worth the time.' }; } }
+    ]; } }
+  ];
+  /* NEW_EVENTS_APPLIED */
+  var EVENT_BY_ID = {};
+  EVENTS.forEach(function (e) { EVENT_BY_ID[e.id] = e; });
+
+  function startEvent(s) {
+    var left = EVENTS.filter(function (e) { return s.usedEvents.indexOf(e.id) < 0; });
+    if (!left.length) { s.usedEvents = []; left = EVENTS.slice(); }
+    var ev = R.pick(left);
+    s.usedEvents.push(ev.id);
+    return { id: ev.id, ctx: ev.setup ? ev.setup(s) : {} };
+  }
+  function eventView(s, inst) {
+    var ev = EVENT_BY_ID[inst.id];
+    var choices = ev.choices(s, inst.ctx).map(function (ch) {
+      var ok = ch.req ? ch.req(s) : true;
+      return { label: ch.label, hint: ch.hint || '', cost: ch.cost || 0, gain: ch.gain || 0, ok: ok, why: ok ? '' : (ch.why || 'Not enough scrap'), run: ch.run };
+    });
+    return { title: ev.title, text: ev.text, choices: choices };
+  }
+  function chooseEvent(s, inst, i) {
+    var view = eventView(s, inst);
+    var ch = view.choices[i];
+    if (!ch || !ch.ok) return null;
+    return ch.run(s);
+  }
+
+  return {
+    C: C, ROLES: ROLES, ORIGINS: ORIGINS, ROLE_KEYS: ROLE_KEYS, ORIGIN_KEYS: ORIGIN_KEYS, ROLE_VAL: ROLE_VAL,
+    SYNERGIES: SYNERGIES, WEAPONS: WEAPONS, NODES: NODES, EVENTS: EVENTS,
+    seed: seed, unseed: unseed, R: R,
+    newRun: newRun, counts: counts, tierOf: tierOf, maxHull: maxHull, syncHull: syncHull, derive: derive, roleEffect: roleEffect,
+    rollShop: rollShop, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
+    upgradeCost: upgradeCost, upgrade: upgrade,
+    weaponValue: weaponValue, sellWeapon: sellWeapon, replaceWeapon: replaceWeapon, giveWeapon: giveWeapon,
+    genBeacons: genBeacons, interest: interest, jumpTo: jumpTo, afterNode: afterNode, dock: dock,
+    makeEnemy: makeEnemy, startCombat: startCombat, heatFactor: heatFactor, stepCombat: stepCombat, flee: flee, endCombat: endCombat,
+    makeLoot: makeLoot, takeLoot: takeLoot,
+    makeStore: makeStore, storeBuy: storeBuy, repair: repair, buySlot: buySlot,
+    DIFFS: DIFFS, diffOf: diffOf, repairPrice: repairPrice,
+    RELICS: RELICS, RELIC_KEYS: RELIC_KEYS,
+    hasRelic: hasRelic, addRelic: addRelic, rollRelic: rollRelic,
+    relicPrice: relicPrice, relicsOwned: relicsOwned, storeBuyRelic: storeBuyRelic,
+    startEvent: startEvent, eventView: eventView, chooseEvent: chooseEvent, typeLabel: typeLabel
+  };
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
+
+</script>
+<script>
+/* Escape to Vega – UI */
+(function () {
+  'use strict';
+  var L = VEGA, C = L.C;
+  var STEP = 0.05;
+  var SAVE_KEY = 'fnv-save-v1', REC_KEY = 'fnv-record-v1', SPEED_KEY = 'fnv-speed-v1';
+  var DIFF_KEY = 'fnv-diff-v1', UNLOCK_KEY = 'fnv-unlock-v1';
+  var Y_E = 19, Y_P = 81;
+
+  var S = {
+    run: null, screen: 'title',
+    combat: null, result: null,
+    event: null, eventOut: null,
+    store: null, reward: null, replace: null, dockHeal: 0,
+    sel: { crew: null, weapon: null },
+    synOpen: false,
+    speed: 2,
+    diff: 0
+  };
+
+  // ---------- Storage (all optional) ----------
+  function put(key, val) { try { if (val === undefined) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* no storage */ } }
+  function get(key) { try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function saveRun() { if (S.run && !S.run.dead && !S.run.won) put(SAVE_KEY, S.run); }
+  function clearRun() { put(SAVE_KEY, undefined); }
+  function savedRun() { var r = get(SAVE_KEY); return r && r.v === 1 && r.crew && !r.dead && !r.won ? r : null; }
+  function record() { return get(REC_KEY) || { runs: 0, wins: 0, best: 0 }; }
+  function addRecord(won) {
+    var r = record();
+    r.runs++; if (won) r.wins++;
+    r.best = Math.max(r.best || 0, won ? 4 : S.run.sector);
+    put(REC_KEY, r);
+    // Winning opens the next rung of the ladder.
+    if (won) {
+      var lv = (S.run && S.run.diff) || 0;
+      if (lv >= unlocked() && lv + 1 < L.DIFFS.length) put(UNLOCK_KEY, lv + 1);
+    }
+  }
+  function unlocked() { var u = get(UNLOCK_KEY); return typeof u === 'number' && u > 0 ? Math.min(u, L.DIFFS.length - 1) : 0; }
+  function pickedDiff() { var d = get(DIFF_KEY); return Math.min(typeof d === 'number' ? d : 0, unlocked()); }
+
+  // ---------- Building blocks ----------
+  var ROLE_IC = { gunner: 'i-gunner', pilot: 'i-pilot', tech: 'i-tech', engineer: 'i-engineer' };
+  var ORIGIN_IC = { human: 'i-human', rock: 'i-rock', bug: 'i-bug', spark: 'i-spark' };
+  var NODE_IC = { fight: 'i-fight', elite: 'i-elite', event: 'i-event', shop: 'i-shop', dock: 'i-dock', guardian: 'i-guardian', boss: 'i-boss' };
+  var RELIC_IC = {
+    lathe: 'i-scrap', ledger: 'i-coin', welder: 'i-engineer', veil: 'i-pilot', blackbox: 'i-event',
+    coil: 'i-tech', spike: 'i-spark', cascade: 'i-spark', reactor: 'i-scrap',
+    hive: 'i-bug', chorus: 'i-human', prism: 'i-gunner'
+  };
+  var RELIC_TIER = { 1: 'Common', 2: 'Rare', 3: 'Prime' };
+  function relicBadge(r) {
+    var cls = r.tier === 3 ? ' double' : r.tier === 2 ? ' syn' : '';
+    return '<span class="badge' + cls + '">' + RELIC_TIER[r.tier] + '</span>';
+  }
+  function ic(id, cls) { return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#' + id + '"/></svg>'; }
+  function cost(n) { return '<span class="cost">' + ic('i-scrap') + n + '</span>'; }
+  function fmt(x, d) { return x.toFixed(d == null ? 1 : d).replace('.', ','); }
+  function stars(n) { return '<span class="stars" aria-label="' + n + (n === 1 ? ' star' : ' stars') + '">' + new Array(n + 1).join('★') + '</span>'; }
+  function hullState(f) { return f > 0.5 ? 'ok' : f > 0.25 ? 'warn' : 'crit'; }
+  function $(sel) { return document.querySelector(sel); }
+  function tags(role, origin) {
+    return '<span class="tag">' + ic(ROLE_IC[role]) + L.ROLES[role].name + '</span><span class="tag">' + ic(ORIGIN_IC[origin]) + L.ORIGINS[origin].name + '</span>';
+  }
+
+  var SHIP_P = '<svg class="shipart" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 3 L39 20 L39 34 L58 46 L58 52 L39 49 L37 58 L27 58 L25 49 L6 52 L6 46 L25 34 L25 20 Z"/><path d="M29 22 h6 v8 h-6 z"/><path class="glow" d="M28 60 L27 64 M36 60 L37 64"/></svg>';
+  var SHIP_E = '<svg class="shipart" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 61 L42 44 L60 38 L54 24 L41 27 L38 6 L26 6 L23 27 L10 24 L4 38 L22 44 Z"/><path d="M28 30 h8 v7 h-8 z"/></svg>';
+  var SHIP_B = '<svg class="shipart" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 63 L40 50 L62 44 L62 30 L46 32 L44 10 L36 2 L28 2 L20 10 L18 32 L2 30 L2 44 L24 50 Z"/><path d="M26 16 h12 v10 h-12 z"/><path d="M22 36 h20 v6 h-20 z"/></svg>';
+
+  function hullBar(h, mh) {
+    var f = Math.max(0, h) / mh;
+    return '<div class="hull"><span class="hull-label">Hull</span><div class="bar"><i style="width:' + (f * 100).toFixed(1) + '%" data-s="' + hullState(f) + '"></i></div><span class="hull-num">' + Math.max(0, h) + ' / ' + mh + '</span></div>';
+  }
+  function topBar() {
+    var s = S.run, pips = '';
+    for (var i = 1; i <= C.SECTOR_LEN + 1; i++) {
+      pips += '<i class="pip' + (i === C.SECTOR_LEN + 1 ? ' gate' : '') + (i <= s.jump ? ' done' : '') + (i === s.jump + 1 && S.screen !== 'combat' && !s.node ? ' now' : '') + '"></i>';
+    }
+    return '<header class="top">' +
+      '<div class="top-route">Sector ' + s.sector + ' of 3' + (s.diff ? ' · ' + L.diffOf(s).name : '') + ' <span class="pips" role="img" aria-label="' + s.jump + ' of ' + (C.SECTOR_LEN + 1) + ' jumps completed">' + pips + '</span></div>' +
+      '<div class="scrap">' + ic('i-scrap') + '<span class="num">' + s.scrap + '</span><span class="sr"> Scrap</span></div>' +
+      hullBar(s.hull, L.maxHull(s)) +
+      '</header>';
+  }
+  function footBar(note, btn) { return '<footer class="foot"><p class="note">' + note + '</p>' + btn + '</footer>'; }
+  function panel(title, meta, inner) {
+    return '<section class="panel"><div class="plate"><h2>' + title + '</h2>' + (meta ? '<span class="meta">' + meta + '</span>' : '') + '</div>' + inner + '</section>';
+  }
+
+  // ---------- Title ----------
+  function routeScreen(run) {
+    var segs = '';
+    for (var sec = 1; sec <= C.SECTORS; sec++) {
+      var dots = '';
+      for (var j = 1; j <= C.SECTOR_LEN + 1; j++) {
+        var done = run && (sec < run.sector || (sec === run.sector && j <= run.jump));
+        var here = run && sec === run.sector && j === run.jump;
+        dots += '<i class="dot' + (j === C.SECTOR_LEN + 1 ? ' gate' : '') + (done ? ' done' : '') + (here ? ' here' : '') + '"></i>';
+      }
+      segs += '<div class="seg"><span class="seg-l">Sector ' + sec + '</span><div class="seg-d">' + dots + '</div></div>';
+    }
+    return '<div class="screen route-screen" aria-hidden="true"><div class="route">' +
+      '<span class="start">' + ic('i-hull') + '</span>' + segs + '<span class="vega">Vega</span></div>' +
+      '<div class="route-foot"><span>18 jumps</span><span>' + (run ? 'Albatross: Sector ' + run.sector + ', Jump ' + run.jump : 'Albatross ready to launch') + '</span></div></div>';
+  }
+  // Difficulty picker. Only rungs the player has earned are selectable; the
+  // next one is shown locked so the ladder is visible from the start.
+  function panelDiff() {
+    var max = unlocked(), cur = pickedDiff();
+    var rows = L.DIFFS.map(function (D, i) {
+      if (i > max + 1) return '';
+      var locked = i > max;
+      return '<button class="btn diffrow' + (i === cur && !locked ? ' on' : '') + '" data-a="diff" data-v="' + i +
+        '"' + (locked ? ' disabled' : '') + ' aria-pressed="' + (i === cur && !locked) + '">' +
+        '<span class="diffname">' + D.name + (locked ? ' · locked' : '') + '</span>' +
+        '<small>' + (locked ? 'Win ' + L.DIFFS[i - 1].name + ' to unlock' : D.blurb) + '</small></button>';
+    }).join('');
+    return panel('Difficulty', L.DIFFS[cur].name, '<div class="diffs">' + rows + '</div>');
+  }
+  function viewTitle() {
+    var saved = savedRun(), rec = record();
+    var actions = saved
+      ? '<button class="btn btn-primary" data-a="continue">Continue Flight</button><button class="btn" data-a="new">New Flight</button>'
+      : '<button class="btn btn-primary btn-block" data-a="new">New Flight</button>';
+    return '<section class="title-hero">' +
+        '<p class="eyebrow">Courier Mission · 3 Sectors</p>' +
+        '<h1 class="display">Escape to Vega</h1>' +
+        '<p class="lead">You fly the Albatross with the last copy of the Star Archive on board. The Syndicate wants it back. Get it to Vega.</p>' +
+      '</section>' +
+      routeScreen(saved) +
+      panelDiff() +
+      '<div class="row-actions">' + actions + '</div>' +
+      panel('How a Flight Works', '', '<ul class="rules">' +
+        '<li>' + ic('i-jump') + '<span>At each jump point you choose the next destination: combat, event, trading post, or space dock.</span></li>' +
+        '<li>' + ic('i-fight') + '<span>Battles play out on their own. Each weapon fires as soon as it’s charged, and each shield layer absorbs one hit.</span></li>' +
+        '<li>' + ic('i-human') + '<span>Between jumps you recruit crew. Three of a kind merge into one member with more stars.</span></li>' +
+        '<li>' + ic('i-spark') + '<span>Two or four of the same role or origin unlock synergies.</span></li>' +
+        '<li>' + ic('i-coin') + '<span>Saved-up scrap earns interest: +1 per 10 scrap, up to +5 per jump.</span></li>' +
+      '</ul>') +
+      (rec.runs ? '<p class="record">' + rec.runs + (rec.runs === 1 ? ' flight' : ' flights') + ' so far · Vega reached: ' + rec.wins + '× · farthest flight: ' + (rec.best > 3 ? 'Vega' : 'Sector ' + rec.best) + '</p>' : '');
+  }
+
+  // ---------- Hangar ----------
+  function panelShip(s, d) {
+    var items = [
+      ['Shields', d.shieldMax + '<small> ' + (d.shieldMax === 1 ? 'layer' : 'layers') + (d.bonusShields ? ' + ' + d.bonusShields + ' extra' : '') + '</small>'],
+      ['Shield Charge', fmt(d.shieldRegen) + '<small> s per layer</small>'],
+      ['Evasion', d.evasion + '<small> %</small>'],
+      ['Weapon Speed', '+' + Math.round((d.chargeMul - 1) * 100) + '<small> %</small>'],
+      ['Repair', d.repairEvery ? '1<small> hull per ' + fmt(d.repairEvery) + ' s</small>' : '–'],
+      ['Boarding Party', d.boarding ? d.boarding.dmg + '<small> damage per ' + d.boarding.every + ' s</small>' : '–']
+    ];
+    return panel('Albatross', 'Shields Lv. ' + s.shieldLv + ' · Engine Lv. ' + s.engineLv,
+      '<dl class="stats">' + items.map(function (it) { return '<div class="stat"><dt>' + it[0] + '</dt><dd>' + it[1] + '</dd></div>'; }).join('') + '</dl>');
+  }
+  function panelWeapons(s, d) {
+    var rows = s.weapons.map(function (k, i) {
+      var W = L.WEAPONS[k], sel = S.sel.weapon === i;
+      var html = '<button class="wrow" data-a="selw" data-v="' + i + '" aria-pressed="' + sel + '">' +
+        '<i class="wdot" data-k="' + k + '"></i><span class="wname">' + W.name + '</span>' +
+        '<span class="wtime">' + fmt(W.charge / d.chargeMul) + ' s</span>' +
+        '<span class="wdesc">' + W.desc + '</span></button>';
+      if (sel) {
+        html += '<div class="sellbar"><span class="note">' + (s.weapons.length <= 1 ? 'The last weapon stays on board.' : 'Removing it earns ' + L.weaponValue(k) + ' scrap.') + '</span>' +
+          '<button class="btn btn-small" data-a="sellw" data-v="' + i + '"' + (s.weapons.length <= 1 ? ' disabled' : '') + '>Remove</button></div>';
+      }
+      return html;
+    }).join('');
+    for (var j = s.weapons.length; j < s.slots; j++) rows += '<div class="wrow empty">Empty slot · Weapons available at the trading post</div>';
+    return panel('Weapons', s.weapons.length + '/' + s.slots + ' · Charge Time', '<div class="wlist">' + rows + '</div>');
+  }
+  function panelCrew(s) {
+    var cards = s.crew.map(function (m) {
+      return '<button class="card" data-a="selcrew" data-v="' + m.id + '" aria-pressed="' + (S.sel.crew === m.id) + '">' +
+        '<span class="card-head"><span class="cname">' + m.name + '</span>' + stars(m.stars) + '</span>' +
+        '<span class="tags">' + tags(m.role, m.origin) + '</span>' +
+        '<span class="eff">' + L.roleEffect(m.role, m.stars) + '</span></button>';
+    }).join('');
+    for (var i = s.crew.length; i < s.cap; i++) cards += '<div class="card empty">Empty bunk</div>';
+    var sel = s.crew.filter(function (m) { return m.id === S.sel.crew; })[0], bar = '';
+    if (sel) {
+      var v = C.SELL[sel.stars - 1];
+      bar = '<div class="sellbar"><span class="note">' + (s.crew.length <= 1 ? 'The Albatross won’t fly without crew.' : sel.name + ' disembarks and leaves ' + v + ' scrap behind.') + '</span>' +
+        '<button class="btn btn-small" data-a="sellcrew" data-v="' + sel.id + '"' + (s.crew.length <= 1 ? ' disabled' : '') + '>Dismiss</button></div>';
+    }
+    return panel('Crew', s.crew.length + '/' + s.cap + ' bunks', '<div class="crew">' + cards + '</div>' + bar);
+  }
+  function panelSynergies(s) {
+    var cnt = L.counts(s), active = [], idle = [];
+    L.SYNERGIES.forEach(function (syn) {
+      var n = cnt[syn.key] || 0, t = L.tierOf(cnt, syn.key);
+      var def = syn.kind === 'role' ? L.ROLES[syn.key] : L.ORIGINS[syn.key];
+      var icon = syn.kind === 'role' ? ROLE_IC[syn.key] : ORIGIN_IC[syn.key];
+      var cells = '';
+      for (var i = 1; i <= 4; i++) cells += '<i class="' + (i <= n ? 'f' : '') + '"></i>';
+      var eff = t === 2 ? syn.tiers[1] : t === 1 ? syn.tiers[0] + ' · at 4: ' + syn.tiers[1] : 'At 2: ' + syn.tiers[0];
+      var row = '<div class="synrow' + (t ? ' on' : '') + '">' + ic(icon) + '<span class="synname">' + def.plural + '</span>' +
+        '<span class="cells" role="img" aria-label="' + n + ' on board">' + cells + '</span><span class="syneff">' + eff + '</span></div>';
+      (n ? active : idle).push(row);
+    });
+    return panel('Synergies', 'at 2 and 4',
+      (active.length ? '<div class="syn">' + active.join('') + '</div>' : '') +
+      (idle.length ? '<details class="more"' + (S.synOpen ? ' open' : '') + '><summary>' + idle.length + ' more synergies</summary><div class="syn">' + idle.join('') + '</div></details>' : ''));
+  }
+  function panelRelics(s) {
+    var list = L.relicsOwned(s);
+    if (!list.length) {
+      return panel('Relics', '0 fitted',
+        '<p class="note pad">Relics bolt onto the hull for the rest of the flight. Watch for them in loot, trading posts and unknown signals.</p>');
+    }
+    var rows = list.map(function (r) {
+      return '<div class="relrow">' + ic(RELIC_IC[r.key]) +
+        '<span class="relname">' + r.name + '</span>' + relicBadge(r) +
+        '<span class="reldesc">' + r.desc + '</span></div>';
+    }).join('');
+    return panel('Relics', list.length + ' fitted', '<div class="rellist">' + rows + '</div>');
+  }
+  function panelRecruit(s) {
+    var cnt = L.counts(s), full = s.crew.length >= s.cap;
+    var rows = s.shop.map(function (o, i) {
+      if (o.sold) return '<div class="offer sold"><span class="otype">' + tags(o.role, o.origin) + '</span><span class="oeff">Hired</span></div>';
+      var merge = L.wouldMerge(s, o.role, o.origin), have = L.copies(s, o.role, o.origin, 1), badges = '';
+      if (merge) badges += '<span class="badge hot">Upgrade ★★</span>';
+      else if (have === 1) badges += '<span class="badge hot">2 of 3</span>';
+      if (!merge) {
+        var rn = (cnt[o.role] || 0) + 1, on = (cnt[o.origin] || 0) + 1;
+        var rHit = rn === 2 || rn === 4, oHit = on === 2 || on === 4;
+        if (rHit && oHit) badges += '<span class="badge double">⚡ Double Synergy</span>';
+        else {
+          if (rHit) badges += '<span class="badge syn">' + L.ROLES[o.role].plural + ' ' + rn + '</span>';
+          if (oHit) badges += '<span class="badge syn">' + L.ORIGINS[o.origin].plural + ' ' + on + '</span>';
+        }
+      }
+      var can = L.canRecruit(s, o.role, o.origin), afford = s.scrap >= C.CREW_PRICE;
+      return '<div class="offer"><span class="otype">' + tags(o.role, o.origin) + '</span>' +
+        '<span class="oeff">' + L.roleEffect(o.role, 1) + '</span>' +
+        (badges ? '<span class="obadges">' + badges + '</span>' : '') +
+        '<button class="btn btn-small' + (merge ? ' btn-primary' : '') + '" data-a="buy" data-v="' + i + '"' + (can && afford ? '' : ' disabled') + ' aria-label="Hire for ' + C.CREW_PRICE + ' scrap">' + (can ? cost(C.CREW_PRICE) : 'Full') + '</button></div>';
+    }).join('');
+    return panel('Recruit', 'new selection each jump',
+      '<div class="offers">' + rows + '</div>' +
+      (full ? '<p class="note pad">All bunks full. Expand quarters or dismiss someone. A third matching crew member always fits, since it merges.</p>' : '') +
+      '<button class="btn" data-a="reroll"' + (s.scrap >= C.REROLL_PRICE ? '' : ' disabled') + '>New Selection ' + cost(C.REROLL_PRICE) + '</button>');
+  }
+  function panelUpgrades(s) {
+    function row(what, title, sub) {
+      var c = L.upgradeCost(s, what);
+      var btn = c == null ? '<button class="btn btn-small" disabled>Max.</button>'
+        : '<button class="btn btn-small" data-a="upg" data-v="' + what + '"' + (s.scrap >= c ? '' : ' disabled') + '>' + cost(c) + '</button>';
+      return '<div class="upg"><b>' + title + '</b><span>' + sub + '</span>' + btn + '</div>';
+    }
+    return panel('Upgrades', '',
+      '<div class="upgs">' +
+      row('shield', 'Shields Level ' + s.shieldLv + (s.shieldLv < 4 ? ' → ' + (s.shieldLv + 1) : ''), s.shieldLv < 4 ? '+1 shield layer' : 'Max level') +
+      row('engine', 'Engine Level ' + s.engineLv + (s.engineLv < 6 ? ' → ' + (s.engineLv + 1) : ''), s.engineLv < 6 ? '+5% evasion' : 'Max level') +
+      row('cap', 'Quarters ' + s.cap + (s.cap < 8 ? ' → ' + (s.cap + 1) : '') + ' bunks', s.cap < 8 ? 'Room for one more crew member' : 'All bunks built') +
+      '</div>');
+  }
+function viewHangar() {
+    var s = S.run, d = L.derive(s), gain = L.interest(s);
+    return topBar() + panelShip(s, d) + panelWeapons(s, d) + panelCrew(s) + panelSynergies(s) +
+      panelRelics(s) + panelRecruit(s) + panelUpgrades(s) +
+      footBar(gain ? 'Interest on next jump: <b class="num">+' + gain + '</b>' : 'Interest kicks in at 10 scrap.',
+        '<button class="btn btn-primary" data-a="map">Star Map ' + ic('i-go') + '</button>');
+  }
+
+  // ---------- Star map ----------
+  function viewMap() {
+    var s = S.run, last = s.jump >= C.SECTOR_LEN;
+    var list = s.beacons.map(function (b, i) {
+      var N = L.NODES[b.type];
+      return '<button class="choice" data-a="jump" data-v="' + i + '" data-t="' + b.type + '">' + ic(NODE_IC[b.type]) +
+        '<b>' + N.name + '</b><span>' + N.hint + '</span>' + ic('i-go', 'go') + '</button>';
+    }).join('');
+    var text = last
+      ? (s.sector >= C.SECTORS ? 'Vega lies directly beyond the flagship. There’s no avoiding it, and no fleeing either.' : 'A guardian blocks the jump gate into Sector ' + (s.sector + 1) + '. Fleeing isn’t possible here.')
+      : 'The jump data shows what awaits you at the next point.';
+    return topBar() +
+      panel(last ? 'Jump Gate' : 'Jump Destinations', 'Jump ' + (s.jump + 1) + ' of ' + (C.SECTOR_LEN + 1), '<p class="note pad">' + text + '</p>') +
+      '<div class="choices">' + list + '</div>' +
+      footBar(L.interest(s) ? 'Interest on jump: <b class="num">+' + L.interest(s) + '</b>' : 'Interest kicks in at 10 scrap.', '<button class="btn" data-a="hangar">Hangar</button>');
+  }
+
+  // ---------- Combat ----------
+  var refs = null, shotEls = {}, loopId = 0;
+  function sidePanel(sd, k) {
+    var w = sd.w.map(function (x, i) { return '<div class="wc"><span>' + L.WEAPONS[x.k].name + '</span><div class="cb"><i id="wc-' + k + '-' + i + '"></i></div></div>'; }).join('');
+    return '<div class="sidep">' +
+      '<div class="sidep-head"><span class="sidep-name' + (k === 'e' ? ' foe' : '') + '">' + sd.name + '</span><span class="sidep-meta">Evasion ' + Math.round(sd.evasion * 100) + '%</span></div>' +
+      '<div id="hb-' + k + '">' + hullBar(sd.hull, sd.maxHull) + '</div>' +
+      '<div class="spips"><span class="slabel">Shields</span><span id="sp-' + k + '" class="spips"></span></div>' +
+      (w ? '<div class="wcharge">' + w + '</div>' : '') +
+      '</div>';
+  }
+  function viewCombat() {
+    var c = S.combat;
+    var intro = c.type === 'boss' ? 'Flagship' : c.type === 'guardian' ? 'Sector Guardian' : c.type === 'elite' ? 'Elite Ship' : 'Enemy Contact';
+    var speed = [1, 2, 4].map(function (n) { return '<button data-a="speed" data-v="' + n + '" aria-pressed="' + (S.speed === n) + '">' + n + '×</button>'; }).join('');
+    return '<section class="combat">' +
+      sidePanel(c.e, 'e') +
+      '<div class="screen lane" id="lane" aria-hidden="true">' +
+        '<div class="lane-heat" id="heat" hidden>Shields overheating</div>' +
+        '<div class="ship ship-e' + (c.type === 'boss' ? ' boss' : '') + '" id="ship-e"><div class="bubble bonus" id="bb-e"></div><div class="bubble" id="bu-e"></div>' + (c.type === 'boss' ? SHIP_B : SHIP_E) + '</div>' +
+        '<div class="ship ship-p" id="ship-p"><div class="bubble bonus" id="bb-p"></div><div class="bubble" id="bu-p"></div>' + SHIP_P + '</div>' +
+        '<div class="shots" id="shots"></div><div class="fxl" id="fxl"></div>' +
+        (c.t < 0.5 ? '<div class="lane-msg intro">' + intro + '</div>' : '') +
+        '<div class="cend" id="cend" hidden></div>' +
+      '</div>' +
+      sidePanel(c.p, 'p') +
+      '<div class="ctrl"><div class="speed" role="group" aria-label="Speed">' + speed + '</div>' +
+        (c.canFlee
+          ? '<button class="btn fleebtn" id="flee" data-a="flee" disabled><span class="fill" id="fleefill"></span><span id="fleetxt">Jump drive charging</span></button>'
+          : '<p class="note noflee">No retreat possible.</p>') +
+      '</div>' +
+      '</section>';
+  }
+  function sideRefs(k) {
+    return {
+      hb: $('#hb-' + k), sp: $('#sp-' + k), ship: $('#ship-' + k), bu: $('#bu-' + k), bb: $('#bb-' + k),
+      w: S.combat[k].w.map(function (x, i) { return $('#wc-' + k + '-' + i); }), key: '', hkey: ''
+    };
+  }
+  function bindCombat() {
+    refs = { shots: $('#shots'), fxl: $('#fxl'), heat: $('#heat'), cend: $('#cend'), flee: $('#flee'), fleefill: $('#fleefill'), fleetxt: $('#fleetxt'), e: sideRefs('e'), p: sideRefs('p') };
+    shotEls = {};
+  }
+  function pipsHtml(sd) {
+    var h = '';
+    for (var i = 0; i < sd.shieldMax; i++) {
+      var on = i < sd.shields;
+      var part = !on && i === sd.shields && sd.shieldProg > 0 ? '<i style="width:' + Math.round(sd.shieldProg * 100) + '%"></i>' : '';
+      h += '<span class="spip' + (on ? ' on' : '') + (!on && sd.shieldLock > 0 ? ' lock' : '') + '">' + part + '</span>';
+    }
+    for (var j = 0; j < sd.bonusMax; j++) {
+      var bon = j < sd.bonus;
+      var bpart = !bon && j === sd.bonus && sd.bonusProg > 0 ? '<i style="width:' + Math.round(sd.bonusProg * 100) + '%"></i>' : '';
+      h += '<span class="spip bonus' + (bon ? ' on' : '') + '">' + bpart + '</span>';
+    }
+    return h || '<span class="slabel">none</span>';
+  }
+  function drawCombat(c) {
+    ['e', 'p'].forEach(function (k) {
+      var sd = c[k], r = refs[k];
+      var hk = sd.hull + '/' + sd.maxHull;
+      if (hk !== r.hkey) { r.hkey = hk; r.hb.innerHTML = hullBar(sd.hull, sd.maxHull); }
+      var sk = sd.shields + '|' + sd.shieldMax + '|' + sd.bonus + '|' + Math.floor(sd.shieldProg * 10) + '|' + Math.floor(sd.bonusProg * 10) + '|' + (sd.shieldLock > 0 ? 1 : 0);
+      if (sk !== r.key) { r.key = sk; r.sp.innerHTML = pipsHtml(sd); }
+      r.bu.style.opacity = sd.shields > 0 ? String(0.25 + 0.15 * Math.min(4, sd.shields)) : '0';
+      r.bb.style.opacity = sd.bonus > 0 ? '0.8' : '0';
+      for (var i = 0; i < sd.w.length; i++) if (r.w[i]) r.w[i].style.transform = 'scaleX(' + Math.min(1, sd.w[i].p).toFixed(3) + ')';
+    });
+    drawShots(c);
+    while (c.fx.length) spawnFx(c.fx.shift());
+    refs.heat.hidden = L.heatFactor(c) <= 1 || c.over;
+    if (refs.flee) {
+      refs.fleefill.style.transform = 'scaleX(' + c.flee.toFixed(3) + ')';
+      var ready = c.flee >= 1 && !c.over;
+      refs.flee.disabled = !ready;
+      var txt = ready ? 'Flee' : c.over ? 'Battle over' : 'Jump drive charging';
+      if (refs.fleetxt.textContent !== txt) refs.fleetxt.textContent = txt;
+    }
+  }
+  function drawShots(c) {
+    var seen = {};
+    c.shots.forEach(function (sh) {
+      seen[sh.id] = 1;
+      var el = shotEls[sh.id];
+      if (!el) {
+        el = document.createElement('div');
+        el.className = sh.kind === 'beam' ? 'beam' : 'shot' + (sh.from === 'e' ? ' e' : '');
+        if (sh.k === 'ion' || sh.k === 'missile' || sh.k === 'flak') el.setAttribute('data-k', sh.k);
+        refs.shots.appendChild(el);
+        shotEls[sh.id] = el;
+      }
+      var prog = 1 - sh.left / sh.travel;
+      var y0 = sh.from === 'p' ? Y_P - 9 : Y_E + 9, y1 = sh.from === 'p' ? Y_E + 4 : Y_P - 4;
+      var x0 = 50 + (sh.x - 50) * 0.35, x1 = 50 + (sh.x - 50) * 0.12;
+      if (sh.kind === 'beam') {
+        var yy = y0 + (y1 - y0) * prog;
+        el.style.left = x1 + '%'; el.style.top = Math.min(y0, yy) + '%'; el.style.height = Math.abs(yy - y0) + '%';
+      } else {
+        el.style.left = (x0 + (x1 - x0) * prog) + '%';
+        el.style.top = (y0 + (y1 - y0) * prog) + '%';
+      }
+    });
+    Object.keys(shotEls).forEach(function (id) { if (!seen[id]) { shotEls[id].remove(); delete shotEls[id]; } });
+  }
+  function flash(el, cls, ms) {
+    el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    clearTimeout(el['_t' + cls]);
+    el['_t' + cls] = setTimeout(function () { el.classList.remove(cls); }, ms);
+  }
+  function spawnFx(f) {
+    var text, cls;
+    switch (f.kind) {
+      case 'hit': case 'missile': case 'beam': text = '−' + f.amt; cls = 'dmg'; break;
+      case 'board': text = 'Boarding −' + f.amt; cls = 'dmg'; break;
+      case 'block': text = 'Shield'; cls = 'blk'; break;
+      case 'miss': text = 'Evaded'; cls = 'miss'; break;
+      case 'ion': text = 'Ion'; cls = 'ion'; break;
+      case 'ionw': text = 'Weapons disrupted'; cls = 'ion'; break;
+      case 'salvo': text = 'Free salvo'; cls = 'blk'; break;
+      default: text = '+' + f.amt; cls = 'rep';
+    }
+    var r = refs[f.key];
+    if (cls === 'dmg') flash(r.ship, 'hit', 280);
+    if (cls === 'blk' || cls === 'ion') flash(r.ship, 'blk', 220);
+    if (refs.fxl.childElementCount > 18) return;
+    var el = document.createElement('div');
+    el.className = 'fx ' + cls + (f.key === 'p' ? ' p' : '');
+    el.textContent = text;
+    el.style.left = (50 + Math.random() * 40 - 20) + '%';
+    el.style.top = (f.key === 'e' ? Y_E + 12 : Y_P - 12) + '%';
+    refs.fxl.appendChild(el);
+    setTimeout(function () { el.remove(); }, 1000);
+  }
+  function startLoop() {
+    var id = ++loopId, last = null, acc = 0;
+    function frame(now) {
+      if (id !== loopId || S.screen !== 'combat' || !S.combat) return;
+      var c = S.combat;
+      if (last === null) last = now;
+      var dt = Math.min(0.1, (now - last) / 1000); last = now;
+      if (!c.over) {
+        acc += dt * S.speed;
+        while (acc >= STEP && !c.over) { L.stepCombat(c, STEP); acc -= STEP; }
+      }
+      drawCombat(c);
+      if (c.over) { onCombatOver(); return; }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  function onCombatOver() {
+    var c = S.combat;
+    if (!S.result) {
+      S.result = L.endCombat(S.run, c);
+      if (S.result.dead) { addRecord(false); clearRun(); }
+      else if (S.result.boss) { addRecord(true); clearRun(); }
+    }
+    var r = S.result, html;
+    if (r.dead) html = '<b class="lose">Albatross destroyed</b><p>The Star Archive drifts in the void.</p><button class="btn btn-primary" data-a="cdone">Continue</button>';
+    else if (r.fled) html = '<b class="win">Escaped</b><p>The jump succeeds. No loot this time.</p><button class="btn btn-primary" data-a="cdone">Continue</button>';
+    else html = '<b class="win">' + (r.boss ? 'Leviathan destroyed' : 'Victory') + '</b><p>' + c.e.name + ' is taken out.</p><button class="btn btn-primary" data-a="cdone">' + (r.boss ? 'Onward to Vega' : 'Collect loot') + '</button>';
+    drawCombat(c);
+    refs.cend.innerHTML = html;
+    refs.cend.hidden = false;
+    var b = refs.cend.querySelector('button');
+    if (b) b.focus({ preventScroll: true });
+  }
+  function startFight(type, opts) {
+    S.combat = L.startCombat(S.run, type, opts || {});
+    S.result = null;
+    go('combat');
+  }
+
+  // ---------- Loot ----------
+function lootButton(o, i) {
+    var s = S.run, title, sub, ok = true;
+    if (o.kind === 'weapon') { var W = L.WEAPONS[o.k]; title = W.name; sub = W.desc + (s.weapons.length >= s.slots ? ' · replaces a weapon' : ''); }
+    else if (o.kind === 'crew') {
+      title = L.typeLabel(o);
+      ok = L.canRecruit(s, o.role, o.origin);
+      sub = ok ? L.roleEffect(o.role, 1) + (L.wouldMerge(s, o.role, o.origin) ? ' · upgrades to ★★' : '') : 'No room on board';
+    }
+    else if (o.kind === 'relic') { var rl = L.RELICS[o.k]; title = rl.name; sub = rl.desc; }       // NEW
+    else if (o.kind === 'scrap') { title = '+' + o.amount + ' Scrap'; sub = 'For the next trading post'; }
+    else { title = '+' + o.amount + ' Hull'; sub = 'Emergency repairs on the spot'; }
+    return '<button class="btn opt' + (o.kind === 'relic' ? ' relopt' : '') + '" data-a="loot" data-v="' + i + '"' + (ok ? '' : ' disabled') + '>' +
+      '<span>' + (o.kind === 'relic' ? relicBadge(L.RELICS[o.k]) + ' ' : '') + title + '</span><small>' + sub + '</small></button>';
+  }
+  function viewReward() {
+    var rw = S.reward;
+    var gains = '<div class="gains"><div>' + ic('i-scrap') + ' <span class="num">+' + rw.scrap + '</span> Scrap</div>' +
+      (rw.healed ? '<div>' + ic('i-hull') + ' <span class="num">+' + rw.healed + '</span> Hull, repaired by your engineers</div>' : '') + '</div>';
+    var loot = '';
+    if (rw.loot && !rw.taken) {
+      loot = panel('Loot', 'choose one', '<div class="loot">' + rw.loot.map(lootButton).join('') + '</div><button class="btn" data-a="lootskip">Take nothing</button>');
+    } else if (rw.taken) loot = '<p class="ev-out">' + rw.taken + '</p>';
+    var canGo = !rw.loot || rw.taken;
+    return topBar() + panel('Battle Won', '', '<h1 class="ev-title">' + rw.name + '</h1>' + gains) + loot +
+      footBar(canGo ? '' : 'Choose your loot first.', '<button class="btn btn-primary" data-a="rdone"' + (canGo ? '' : ' disabled') + '>Continue ' + ic('i-go') + '</button>');
+  }
+function describeTaken(o, r) {
+    if (o.kind === 'weapon') return L.WEAPONS[o.k].name + ' is installed.';
+    if (o.kind === 'crew') return r.merged ? r.member.name + ' merges and now has ' + r.member.stars + ' stars.' : r.member.name + ' is on board.';
+    if (o.kind === 'relic') return L.RELICS[o.k].name + ' is bolted to the hull. ' + L.RELICS[o.k].desc;   // NEW
+    if (o.kind === 'scrap') return '+' + o.amount + ' scrap collected.';
+    return 'The hull is patched up.';
+  }
+
+  // ---------- Event ----------
+  function viewEvent() {
+    var view = L.eventView(S.run, S.event), body;
+    if (!S.eventOut) {
+      body = '<div class="choices">' + view.choices.map(function (ch, i) {
+        var bits = [];
+        if (ch.ok) { if (ch.hint) bits.push(ch.hint); if (ch.cost) bits.push('costs ' + ch.cost + ' scrap'); if (ch.gain) bits.push('+' + ch.gain + ' scrap'); }
+        else bits.push(ch.why);
+        return '<button class="btn opt" data-a="ev" data-v="' + i + '"' + (ch.ok ? '' : ' disabled') + '><span>' + ch.label + '</span>' + (bits.length ? '<small>' + bits.join(' · ') + '</small>' : '') + '</button>';
+      }).join('') + '</div>';
+    } else {
+      var out = S.eventOut;
+      body = '<p class="ev-out">' + out.text + '</p>' +
+        footBar('', out.combat ? '<button class="btn btn-primary" data-a="evfight">To Battle ' + ic('i-go') + '</button>' : '<button class="btn btn-primary" data-a="evdone">Continue ' + ic('i-go') + '</button>');
+    }
+    return topBar() + panel('Unknown Signal', '', '<h1 class="ev-title">' + view.title + '</h1><p class="ev-text">' + view.text + '</p>') + body;
+  }
+
+  // ---------- Trading post ----------
+function viewStore() {
+    var s = S.run, st = S.store, mh = L.maxHull(s);
+    var offers = st.offers.map(function (o, i) {
+      var W = L.WEAPONS[o.k];
+      return '<div class="offer' + (o.sold ? ' sold' : '') + '"><span class="otype"><span class="tag"><i class="wdot" data-k="' + o.k + '"></i>' + W.name + '</span></span>' +
+        '<span class="oeff">' + W.desc + ' · charges in ' + W.charge + ' s</span>' +
+        (o.sold ? '<button class="btn btn-small" disabled>Bought</button>'
+          : '<button class="btn btn-small" data-a="sbuy" data-v="' + i + '"' + (s.scrap >= o.price ? '' : ' disabled') + '>' + cost(o.price) + '</button>') + '</div>';
+    }).join('');
+    var relicPanel = '';                                                      // NEW
+    if (st.relic) {
+      var rl = L.RELICS[st.relic.k];
+      relicPanel = panel('Relic', RELIC_TIER[rl.tier],
+        '<div class="offers"><div class="offer' + (st.relic.sold ? ' sold' : '') + '">' +
+        '<span class="otype"><span class="tag">' + ic(RELIC_IC[rl.key]) + rl.name + '</span></span>' +
+        '<span class="oeff">' + rl.desc + '</span>' +
+        /* full .btn (48 px), not .btn-small: a relic is a bigger decision than a weapon */
+        (st.relic.sold ? '<button class="btn" disabled>Bought</button>'
+          : '<button class="btn" data-a="sbuyrel"' + (s.scrap >= st.relic.price ? '' : ' disabled') + '>' + cost(st.relic.price) + '</button>') +
+        '</div></div>');
+    }
+    return topBar() +
+      panel('Trading Post', 'Weapons ' + s.weapons.length + '/' + s.slots,
+        '<p class="note pad">' + (s.weapons.length >= s.slots ? 'All slots full: a new weapon replaces an old one; the old one earns half its price.' : 'Purchased weapons are installed immediately.') + '</p>' +
+        '<div class="offers">' + offers + '</div>') +
+      relicPanel +                                                            // NEW
+      panel('Shipyard', '',
+        '<div class="upgs"><div class="upg"><b>Patch Hull</b><span>+' + C.REPAIR_AMOUNT + ' hull · now ' + s.hull + ' / ' + mh + '</span><button class="btn btn-small" data-a="srep"' + (s.scrap >= L.repairPrice(s) && s.hull < mh ? '' : ' disabled') + '>' + cost(L.repairPrice(s)) + '</button></div>' +
+        '<div class="upg"><b>Install Weapon Slot</b><span>' + (s.slots >= 4 ? 'Already 4 slots' : 'Room for a fourth weapon') + '</span><button class="btn btn-small" data-a="sslot"' + (s.slots < 4 && s.scrap >= C.SLOT_COST ? '' : ' disabled') + '>' + (s.slots >= 4 ? 'Max.' : cost(C.SLOT_COST)) + '</button></div></div>') +
+      footBar('Crew and upgrades are available in the hangar.', '<button class="btn btn-primary" data-a="sdone">Depart ' + ic('i-go') + '</button>');
+  }
+
+  // ---------- Replace weapon ----------
+  function viewReplace() {
+    var s = S.run, rp = S.replace, W = L.WEAPONS[rp.k];
+    var rows = s.weapons.map(function (k, i) {
+      return '<button class="btn opt" data-a="rep" data-v="' + i + '"><span>Remove ' + L.WEAPONS[k].name + '</span><small>earns ' + L.weaponValue(k) + ' scrap · ' + L.WEAPONS[k].desc + '</small></button>';
+    }).join('');
+    return topBar() +
+      panel('All Weapon Slots Full', '', '<h1 class="ev-title">' + W.name + '</h1><p class="ev-text">' + W.desc + '. Which weapon should make room for it?</p>') +
+      '<div class="choices">' + rows + '</div>' +
+      '<button class="btn" data-a="repskip">' + (rp.refund ? 'Don’t buy it after all · ' + rp.refund + ' scrap refunded' : 'Leave ' + W.name + ' behind') + '</button>';
+  }
+
+  // ---------- Space dock & end ----------
+  function viewDock() {
+    return topBar() + panel('Space Dock', '', '<h1 class="ev-title">Shipyard in Orbit</h1><p class="ev-text">' +
+      (S.dockHeal > 0 ? 'The dock crew patches your hull. +' + S.dockHeal + ' hull.' : 'The dock crew finds not a scratch and treats you to a coffee.') + '</p>') +
+      footBar('', '<button class="btn btn-primary" data-a="ddone">Continue ' + ic('i-go') + '</button>');
+  }
+  function endStats(s) {
+    var items = [['Wins', s.stats.wins], ['Escapes', s.stats.fled], ['Scrap collected', s.stats.scrap], ['Jumps', s.stats.jumps]];
+    var crew = s.crew.map(function (m) { return m.name + ' ' + new Array(m.stars + 1).join('★'); }).join(', ');
+    return panel('Logbook', '', '<dl class="stats">' + items.map(function (it) { return '<div class="stat"><dt>' + it[0] + '</dt><dd>' + it[1] + '</dd></div>'; }).join('') + '</dl><p class="note pad">Crew: ' + crew + '</p>');
+  }
+  function viewOver() {
+    var s = S.run;
+    return '<section class="end-hero"><p class="eyebrow">Flight Ended</p><h1 class="display lose">Albatross Lost</h1>' +
+      '<p class="lead">You made it to Sector ' + s.sector + ', Jump ' + s.jump + '.</p></section>' + endStats(s) +
+      '<div class="row-actions"><button class="btn btn-primary" data-a="new">New Flight</button><button class="btn" data-a="title">Title Screen</button></div>';
+  }
+  function viewWin() {
+    var s = S.run;
+    return '<section class="end-hero"><p class="eyebrow">Mission Accomplished</p><h1 class="display">Vega Reached</h1>' +
+      '<p class="lead">The Star Archive is safe. The Albatross lands with ' + s.hull + ' hull.</p></section>' + endStats(s) +
+      '<div class="row-actions"><button class="btn btn-primary" data-a="new">New Flight</button><button class="btn" data-a="title">Title Screen</button></div>';
+  }
+
+  // ---------- Flow ----------
+  function resetUi() {
+    S.combat = null; S.result = null; S.event = null; S.eventOut = null; S.store = null; S.reward = null; S.replace = null;
+    S.sel = { crew: null, weapon: null };
+    loopId++;
+  }
+  function enterNode(type) {
+    if (type === 'fight' || type === 'elite' || type === 'guardian' || type === 'boss') startFight(type, {});
+    else if (type === 'event') { S.event = L.startEvent(S.run); S.eventOut = null; go('event'); }
+    else if (type === 'shop') { S.store = L.makeStore(S.run); go('store'); }
+    else { S.dockHeal = L.dock(S.run); go('dock'); }
+  }
+  function finishNode() {
+    var up = L.afterNode(S.run);
+    resetUi();
+    if (up) toast('Jump gate cleared: Sector ' + S.run.sector);
+    go('hangar');
+  }
+  function toast(msg) {
+    var box = document.getElementById('toasts'), el = document.createElement('div');
+    el.className = 'toast'; el.textContent = msg;
+    box.appendChild(el);
+    while (box.children.length > 3) box.removeChild(box.firstChild);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2700);
+  }
+  var VIEWS = { title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
+  function render() {
+    if (S.screen !== 'title' && !S.run) S.screen = 'title';
+    document.getElementById('app').innerHTML = VIEWS[S.screen]();
+    if (S.screen === 'combat') {
+      bindCombat();
+      drawCombat(S.combat);
+      if (S.combat.over) onCombatOver(); else startLoop();
+    } else loopId++;
+    if (S.screen === 'hangar' || S.screen === 'map') saveRun();
+  }
+  function go(screen) {
+    var changed = S.screen !== screen;
+    S.screen = screen;
+    render();
+    if (changed) window.scrollTo(0, 0);
+  }
+
+  var ACTIONS = {
+    'new': function () { S.run = L.newRun(pickedDiff()); resetUi(); go('hangar'); },
+    'diff': function (v) { var n = Math.min(+v, unlocked()); put(DIFF_KEY, n); render(); },
+    'continue': function () { var r = savedRun(); if (!r) { render(); return; } S.run = r; resetUi(); go('hangar'); },
+    'title': function () { resetUi(); go('title'); },
+    'map': function () { S.sel = { crew: null, weapon: null }; go('map'); },
+    'hangar': function () { go('hangar'); },
+    'jump': function (v) {
+      var j = L.jumpTo(S.run, +v);
+      if (!j) return;
+      if (j.interest) toast('Interest: +' + j.interest + ' scrap');
+      enterNode(j.type);
+    },
+    'buy': function (v) {
+      var r = L.buyCrew(S.run, +v);
+      if (!r) return;
+      toast(r.merged ? r.member.name + ' merges: now ' + r.member.stars + ' stars' : r.member.name + ' is on board');
+      render();
+    },
+    'reroll': function () { if (L.reroll(S.run)) render(); },
+    'upg': function (v) { if (L.upgrade(S.run, v)) render(); },
+    'selcrew': function (v) { S.sel.crew = S.sel.crew === +v ? null : +v; render(); },
+    'sellcrew': function (v) {
+      var m = S.run.crew.filter(function (x) { return x.id === +v; })[0];
+      var got = L.sellCrew(S.run, +v);
+      if (got) toast((m ? m.name : 'Crew member') + ' disembarks: +' + got + ' scrap');
+      S.sel.crew = null; render();
+    },
+    'selw': function (v) { S.sel.weapon = S.sel.weapon === +v ? null : +v; render(); },
+    'sellw': function (v) { var got = L.sellWeapon(S.run, +v); if (got) toast('Weapon removed: +' + got + ' scrap'); S.sel.weapon = null; render(); },
+    'speed': function (v) {
+      S.speed = +v; put(SPEED_KEY, S.speed);
+      document.querySelectorAll('.speed button').forEach(function (b) { b.setAttribute('aria-pressed', String(+b.getAttribute('data-v') === S.speed)); });
+    },
+    'flee': function () { if (S.combat) L.flee(S.combat); },
+    'cdone': function () {
+      var r = S.result, c = S.combat;
+      if (!r) return;
+      S.combat = null; loopId++;
+      if (r.dead) { go('over'); return; }
+      if (r.boss) { go('win'); return; }
+      if (r.fled) { finishNode(); return; }
+      S.reward = { name: c.e.name, scrap: r.scrap, healed: r.healed, loot: r.loot, taken: null };
+      go('reward');
+    },
+    'loot': function (v) {
+      var o = S.reward.loot[+v];
+      var r = L.takeLoot(S.run, o);
+      if (r.full) { toast('No room on board'); return; }
+      if (r.replace) { S.replace = { k: r.replace, refund: 0, back: 'reward' }; go('replace'); return; }
+      S.reward.taken = describeTaken(o, r);
+      render();
+    },
+    'lootskip': function () { S.reward.taken = 'You leave the loot drifting.'; render(); },
+    'rdone': function () { finishNode(); },
+    'ev': function (v) {
+      var out = L.chooseEvent(S.run, S.event, +v);
+      if (!out) return;
+      S.eventOut = out;
+      if (out.replace) { S.replace = { k: out.replace, refund: 0, back: 'event' }; go('replace'); return; }
+      render();
+    },
+    'evfight': function () { var o = S.eventOut.combat; startFight(o.type, o); },
+    'evdone': function () { finishNode(); },
+    'sbuy': function (v) {
+      var r = L.storeBuy(S.run, S.store, +v);
+      if (!r) return;
+      if (r.replace) { S.replace = { k: r.replace, refund: r.refund, back: 'store', offer: +v }; go('replace'); return; }
+      toast(L.WEAPONS[S.store.offers[+v].k].name + ' is installed');
+      render();
+    },
+  'sbuyrel': function () {
+    var r = L.storeBuyRelic(S.run, S.store);
+    if (!r) return;
+    toast(r.relic.name + ' bolted on');
+    render();
+  },
+    'srep': function () { if (L.repair(S.run)) render(); },
+    'sslot': function () { if (L.buySlot(S.run)) { toast('Fourth weapon slot installed'); render(); } },
+    'sdone': function () { finishNode(); },
+    'rep': function (v) {
+      var rp = S.replace, old = S.run.weapons[+v];
+      var got = L.replaceWeapon(S.run, +v, rp.k);
+      toast(L.WEAPONS[rp.k].name + ' replaces ' + L.WEAPONS[old].name + ': +' + got + ' scrap');
+      if (rp.back === 'reward') S.reward.taken = L.WEAPONS[rp.k].name + ' is installed.';
+      S.replace = null;
+      go(rp.back);
+    },
+    'repskip': function () {
+      var rp = S.replace;
+      if (rp.back === 'store' && rp.refund) { S.run.scrap += rp.refund; S.store.offers[rp.offer].sold = false; }
+      if (rp.back === 'reward') S.reward.taken = 'You leave ' + L.WEAPONS[rp.k].name + ' drifting.';
+      if (rp.back === 'event') S.eventOut.text += ' You leave the weapon behind.';
+      S.replace = null;
+      go(rp.back);
+    },
+    'ddone': function () { finishNode(); }
+  };
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-a]') : null;
+    if (!el || el.disabled) return;
+    var fn = ACTIONS[el.getAttribute('data-a')];
+    if (fn) { e.preventDefault(); fn(el.getAttribute('data-v')); }
+  });
+  document.addEventListener('toggle', function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains('more')) S.synOpen = e.target.open;
+  }, true);
+
+  // For automated tests
+  window.FNV = {
+    S: S, L: L,
+    act: function (a, v) { ACTIONS[a](v == null ? null : String(v)); },
+    finishCombat: function () { var c = S.combat; if (!c) return; while (!c.over) L.stepCombat(c, STEP); }
+  };
+
+  function start(data) {
+    var sp = get(SPEED_KEY);
+    if (sp === 1 || sp === 2 || sp === 4) S.speed = sp;
+    if (data && data.run && data.run.v === 1 && !data.run.dead && !data.run.won) {
+      S.run = data.run;
+      S.screen = data.screen === 'map' ? 'map' : 'hangar';
+    } else S.screen = 'title';
+    render();
+  }
+  var hot = window.claude && window.claude.hot;
+  try {
+    if (hot && hot.snapshot) hot.snapshot(function () {
+      return S.run && !S.run.dead && !S.run.won && (S.screen === 'hangar' || S.screen === 'map') ? { run: S.run, screen: S.screen } : {};
+    });
+  } catch (e) { /* no snapshot */ }
+  if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+})();
+
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+}
+</script>
+</body>
+</html>
