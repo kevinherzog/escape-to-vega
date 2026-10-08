@@ -1,5 +1,5 @@
 // Offline cache for Escape to Vega. Bump the version number when shipping an update.
-const CACHE = 'vega-v5';
+const CACHE = 'vega-v6';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (e) => {

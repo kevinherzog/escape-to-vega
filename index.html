@@ -910,9 +910,14 @@ function newRun(diff, seedVal) {
     var result = null;
     for (var st = 1; st <= 2; st++) {
       var same = s.crew.filter(function (m) { return m.role === role && m.origin === origin && m.stars === st; });
-      if (same.length >= 3) {
+      // Three of a kind make a two-star, but only two two-stars make a three-star.
+      // At a flat three the third star needed nine copies of one of sixteen types
+      // and never once appeared in 500 simulated runs — the whole tier, and the
+      // three-star values in ROLE_VAL, were unreachable content.
+      var need = st === 1 ? 3 : 2;
+      if (same.length >= need) {
         var keep = same[0];
-        var drop = {}; drop[same[1].id] = true; drop[same[2].id] = true;
+        var drop = {}; drop[same[1].id] = true; if (need > 2) drop[same[2].id] = true;
         s.crew = s.crew.filter(function (m) { return !drop[m.id]; });
         keep.stars = st + 1;
         result = keep;
@@ -1836,7 +1841,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
       panel('How a Flight Works', '', '<ul class="rules">' +
         '<li>' + ic('i-jump') + '<span>At each jump point you choose the next destination: combat, event, trading post, or space dock.</span></li>' +
         '<li>' + ic('i-fight') + '<span>Battles play out on their own. Each weapon fires as soon as it’s charged, and each shield layer absorbs one hit.</span></li>' +
-        '<li>' + ic('i-human') + '<span>Between jumps you recruit crew. Three of a kind merge into one member with more stars.</span></li>' +
+        '<li>' + ic('i-human') + '<span>Between jumps you recruit crew. Three of a kind merge into a two-star member, and two of those merge again into three stars.</span></li>' +
         '<li>' + ic('i-spark') + '<span>Two or four <em>different</em> crew sharing a role or origin unlock synergies. A type you already have adds nothing to the count — duplicates are only good for merging.</span></li>' +
         '<li>' + ic('i-coin') + '<span>Saved-up scrap earns interest: +1 per 10 scrap, up to +5 per jump.</span></li>' +
       '</ul>') +
@@ -2327,7 +2332,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v5',
+      cache: 'vega-v6',
       when: new Date().toISOString(),
       seed: s.seed,
       difficulty: (s.diff || 0) + ' ' + L.diffOf(s).name,
