@@ -507,7 +507,7 @@ var VEGA = (function () {
     REROLL_PRICE: 2,
     SHIELD_COST: { 2: 14, 3: 22, 4: 32 },
     ENGINE_COST: { 2: 6, 3: 9, 4: 12, 5: 16, 6: 20 },
-    CAP_COST: { 5: 5, 6: 7, 7: 9, 8: 11 },
+    CAP_COST: { 3: 4, 4: 4, 5: 5, 6: 7, 7: 9, 8: 11 },   // 3 and 4 exist for ships that start below four bunks
     SLOT_COST: 14,
     REPAIR_PRICE: 3, REPAIR_AMOUNT: 4,
     DOCK_HEAL: 12,
@@ -897,9 +897,45 @@ function derive(s) {
   function diffOf(s) { return DIFFS[(s && s.diff) || 0] || DIFFS[0]; }
   function repairPrice(s) { return C.REPAIR_PRICE + diffOf(s).repair; }
 
+  // ---------- Ships ----------
+  // Each ship removes a capability and overpays somewhere else, so the question
+  // the run asks you is different. Varying only the numbers would produce a
+  // difficulty slider that you play identically, which is the trap here.
+  var LOADOUTS = [
+    { key: 'albatross', name: 'Albatross', blurb: 'The courier. No strengths, no holes.',
+      hull: 30, shieldLv: 1, engineLv: 1, weapons: ['burst', 'laser'], slots: 3, maxSlots: 4,
+      cap: 4, maxCap: 8, scrap: 10, crew: null, relic: null, noShields: false, crewPrice: 3, scrapMul: 1,
+      unlock: null },
+
+    { key: 'hammerhead', name: 'Hammerhead', blurb: 'Four guns, two bunks, and no room to grow a crew.',
+      hull: 32, shieldLv: 1, engineLv: 1, weapons: ['heavy', 'burst', 'laser'], slots: 4, maxSlots: 4,
+      cap: 2, maxCap: 3, scrap: 6, crew: null, relic: null, noShields: false, crewPrice: 3, scrapMul: 1,
+      unlock: 'Reach Vega with any ship' },
+
+    { key: 'chapel', name: 'Chapel', blurb: 'One gun. Six bunks. Win with the people, not the guns.',
+      hull: 34, shieldLv: 1, engineLv: 1, weapons: ['burst'], slots: 1, maxSlots: 2,
+      cap: 6, maxCap: 8, scrap: 8, crew: null, relic: null, noShields: false, crewPrice: 2, scrapMul: 1,
+      unlock: 'Field a crew of 6' },
+
+    { key: 'needle', name: 'Needle', blurb: 'Fast and thin. Shields cannot be fitted at all.',
+      hull: 18, shieldLv: 0, engineLv: 3, weapons: ['beam', 'laser'], slots: 3, maxSlots: 3,
+      cap: 4, maxCap: 6, scrap: 10, crew: null, relic: 'gyro', noShields: true, crewPrice: 3, scrapMul: 1,
+      unlock: 'Win a fight without taking a hit' },
+
+    { key: 'rustbucket', name: 'Rustbucket', blurb: 'Starts with nothing. Earns half again as much.',
+      hull: 26, shieldLv: 1, engineLv: 1, weapons: ['mining'], slots: 3, maxSlots: 4,
+      cap: 4, maxCap: 8, scrap: 0, crew: null, relic: 'ledger', noShields: false, crewPrice: 3, scrapMul: 1.5,
+      unlock: 'Bank 80 scrap in one run' }
+  ];
+  var LOADOUT_BY_KEY = {};
+  LOADOUTS.forEach(function (l) { LOADOUT_BY_KEY[l.key] = l; });
+  function loadoutOf(s) { return LOADOUT_BY_KEY[(s && s.ship) || 'albatross'] || LOADOUTS[0]; }
+  function crewPrice(s) { return loadoutOf(s).crewPrice; }
+
   // ---------- New run ----------
-function newRun(diff, seedVal) {
+function newRun(diff, seedVal, shipKey) {
     var D = DIFFS[diff] || DIFFS[0];
+    var SHIP = LOADOUT_BY_KEY[shipKey] || LOADOUTS[0];
     // Every run gets a recorded seed, so a run report can be replayed. Pass one
     // in to repeat a specific run.
     var sd = (seedVal == null ? (Math.random() * 4294967296) : seedVal) >>> 0;
@@ -909,12 +945,13 @@ function newRun(diff, seedVal) {
       seed: sd,
       diff: D.lv,
       sector: 1, jump: 0,
-      hull: C.START_HULL + D.hull, baseMaxHull: C.START_HULL + D.hull, rockApplied: 0,
-      shieldLv: 1, engineLv: 1,
-      weapons: ['burst', 'laser'], slots: 3,
-      crew: [], cap: 4,
-      scrap: 10 + D.scrap,
-      relics: [],                    // NEW - array of RELICS keys, JSON-safe
+      ship: SHIP.key,
+      hull: SHIP.hull + D.hull, baseMaxHull: SHIP.hull + D.hull, rockApplied: 0,
+      shieldLv: SHIP.shieldLv, engineLv: SHIP.engineLv,
+      weapons: SHIP.weapons.slice(), slots: SHIP.slots,
+      crew: [], cap: SHIP.cap,
+      scrap: Math.max(0, SHIP.scrap + D.scrap),
+      relics: SHIP.relic ? [SHIP.relic] : [],
       rerolls: 0,
       shop: [], beacons: [],
       node: null,
@@ -923,9 +960,13 @@ function newRun(diff, seedVal) {
       nextId: 1,
       dead: false, won: false
     };
-    var roles = R.shuffle(ROLE_KEYS), origins = R.shuffle(ORIGIN_KEYS);
-    s.crew.push(makeCrew(s, roles[0], origins[0]));
-    s.crew.push(makeCrew(s, roles[1], origins[1]));
+    if (SHIP.crew) {
+      SHIP.crew.forEach(function (t) { s.crew.push(makeCrew(s, t[0], t[1])); });
+    } else {
+      var roles = R.shuffle(ROLE_KEYS), origins = R.shuffle(ORIGIN_KEYS);
+      var want = Math.min(2, SHIP.cap);
+      for (var ci = 0; ci < want; ci++) s.crew.push(makeCrew(s, roles[ci], origins[ci]));
+    }
     rollShop(s);
     s.beacons = genBeacons(s);
     return s;
@@ -984,7 +1025,7 @@ function newRun(diff, seedVal) {
     if (need < 2) return null;                      // a single buy already works
     if (need > shopCopies(s, role, origin)) return null;
     if (s.crew.length + need - 2 > s.cap) return null;   // still overflows after merging
-    var cost = need * C.CREW_PRICE;
+    var cost = need * crewPrice(s);
     if (s.scrap < cost) return null;
     return { need: need, cost: cost };
   }
@@ -1006,8 +1047,8 @@ function newRun(diff, seedVal) {
   }
   function buyCrew(s, idx) {
     var o = s.shop[idx];
-    if (!o || o.sold || s.scrap < C.CREW_PRICE || !canRecruit(s, o.role, o.origin)) return null;
-    s.scrap -= C.CREW_PRICE;
+    if (!o || o.sold || s.scrap < crewPrice(s) || !canRecruit(s, o.role, o.origin)) return null;
+    s.scrap -= crewPrice(s);
     o.sold = true;
     return addCrew(s, o.role, o.origin);
   }
@@ -1037,9 +1078,13 @@ function newRun(diff, seedVal) {
 
   // ---------- Upgrades ----------
   function upgradeCost(s, what) {
-    if (what === 'shield') return s.shieldLv < 4 ? C.SHIELD_COST[s.shieldLv + 1] : null;
+    var SHIP = loadoutOf(s);
+    if (what === 'shield') {
+      if (SHIP.noShields) return null;            // the Needle has no generator to upgrade
+      return s.shieldLv < 4 ? C.SHIELD_COST[s.shieldLv + 1] : null;
+    }
     if (what === 'engine') return s.engineLv < 6 ? C.ENGINE_COST[s.engineLv + 1] : null;
-    if (what === 'cap') return s.cap < 8 ? C.CAP_COST[s.cap + 1] : null;
+    if (what === 'cap') return s.cap < Math.min(8, SHIP.maxCap) ? C.CAP_COST[s.cap + 1] : null;
     return null;
   }
   function upgrade(s, what) {
@@ -1337,6 +1382,7 @@ function endCombat(s, c) {
       if (hasRelic(s, 'lathe') && c.dealt) scrap += Math.floor(c.dealt / RELICS.lathe.per);               // Salvage Lathe
       if (hasRelic(s, 'ledger')) scrap += Math.min(RELICS.ledger.cap, Math.floor(s.scrap * RELICS.ledger.rate)); // Syndicate Ledger
     }
+    scrap = Math.round(scrap * loadoutOf(s).scrapMul);
     s.scrap += scrap; s.stats.scrap += scrap;
     var before = s.hull;
     s.hull = Math.min(maxHull(s), s.hull + d.healAfter);
@@ -1449,7 +1495,7 @@ function makeStore(s) {
     return true;
   }
   function buySlot(s) {
-    if (s.slots >= 4 || s.scrap < C.SLOT_COST) return false;
+    if (s.slots >= Math.min(4, loadoutOf(s).maxSlots) || s.scrap < C.SLOT_COST) return false;
     s.scrap -= C.SLOT_COST; s.slots++;
     return true;
   }
@@ -1806,6 +1852,7 @@ function makeStore(s) {
     makeLoot: makeLoot, takeLoot: takeLoot,
     makeStore: makeStore, makeBroker: makeBroker, brokerBuy: brokerBuy, brokerPrice: brokerPrice, storeBuy: storeBuy, repair: repair, buySlot: buySlot,
     DIFFS: DIFFS, diffOf: diffOf, repairPrice: repairPrice,
+    LOADOUTS: LOADOUTS, loadoutOf: loadoutOf, crewPrice: crewPrice,
     RELICS: RELICS, RELIC_KEYS: RELIC_KEYS,
     hasRelic: hasRelic, addRelic: addRelic, rollRelic: rollRelic,
     relicPrice: relicPrice, relicsOwned: relicsOwned, storeBuyRelic: storeBuyRelic,
@@ -1823,6 +1870,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   var STEP = 0.05;
   var SAVE_KEY = 'fnv-save-v1', REC_KEY = 'fnv-record-v1', SPEED_KEY = 'fnv-speed-v1';
   var DIFF_KEY = 'fnv-diff-v1', UNLOCK_KEY = 'fnv-unlock-v1';
+  var SHIP_KEY = 'fnv-ship-v1', SHIPS_KEY = 'fnv-ships-v1';
   var Y_E = 19, Y_P = 81;
 
   var S = {
@@ -1849,6 +1897,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     r.runs++; if (won) r.wins++;
     r.best = Math.max(r.best || 0, won ? 4 : S.run.sector);
     put(REC_KEY, r);
+    if (won) unlockShip('hammerhead');
     // Winning opens the next rung of the ladder.
     if (won) {
       var lv = (S.run && S.run.diff) || 0;
@@ -1856,6 +1905,23 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     }
   }
   function unlocked() { var u = get(UNLOCK_KEY); return typeof u === 'number' && u > 0 ? Math.min(u, L.DIFFS.length - 1) : 0; }
+  function ships() { var v = get(SHIPS_KEY); return v && v.length ? v : ['albatross']; }
+  function shipUnlocked(k) { return ships().indexOf(k) >= 0; }
+  function unlockShip(k) {
+    if (shipUnlocked(k)) return false;
+    var v = ships(); v.push(k); put(SHIPS_KEY, v);
+    toast(L.LOADOUTS.filter(function (l) { return l.key === k; })[0].name + ' unlocked');
+    return true;
+  }
+  function pickedShip() { var k = get(SHIP_KEY); return shipUnlocked(k) ? k : 'albatross'; }
+  // Checked after every node, so a ship can be earned mid-run rather than only
+  // on the results screen.
+  function checkShipUnlocks() {
+    var s = S.run;
+    if (!s) return;
+    if (s.crew.length >= 6) unlockShip('chapel');
+    if (s.stats.scrap >= 80) unlockShip('rustbucket');
+  }
   function pickedDiff() { var d = get(DIFF_KEY); return Math.min(typeof d === 'number' ? d : 0, unlocked()); }
 
   // ---------- Building blocks ----------
@@ -1896,7 +1962,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
       pips += '<i class="pip' + (i === C.SECTOR_LEN + 1 ? ' gate' : '') + (i <= s.jump ? ' done' : '') + (i === s.jump + 1 && S.screen !== 'combat' && !s.node ? ' now' : '') + '"></i>';
     }
     return '<header class="top">' +
-      '<div class="top-route">Sector ' + s.sector + ' of 3' + (s.diff ? ' · ' + L.diffOf(s).name : '') + ' <span class="pips" role="img" aria-label="' + s.jump + ' of ' + (C.SECTOR_LEN + 1) + ' jumps completed">' + pips + '</span></div>' +
+      '<div class="top-route">' + L.loadoutOf(s).name + ' · Sector ' + s.sector + ' of 3' + (s.diff ? ' · ' + L.diffOf(s).name : '') + ' <span class="pips" role="img" aria-label="' + s.jump + ' of ' + (C.SECTOR_LEN + 1) + ' jumps completed">' + pips + '</span></div>' +
       '<div class="scrap">' + ic('i-scrap') + '<span class="num">' + s.scrap + '</span><span class="sr"> Scrap</span></div>' +
       hullBar(s.hull, L.maxHull(s)) +
       '</header>';
@@ -1936,6 +2002,18 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     }).join('');
     return panel('Difficulty', L.DIFFS[cur].name, '<div class="diffs">' + rows + '</div>');
   }
+  function panelShips() {
+    var cur = pickedShip();
+    var rows = L.LOADOUTS.map(function (l) {
+      var open = shipUnlocked(l.key);
+      return '<button class="btn diffrow' + (l.key === cur && open ? ' on' : '') + '" data-a="ship" data-v="' + l.key +
+        '"' + (open ? '' : ' disabled') + ' aria-pressed="' + (l.key === cur && open) + '">' +
+        '<span class="diffname">' + l.name + (open ? '' : ' · locked') + '</span>' +
+        '<small>' + (open ? l.blurb : l.unlock) + '</small></button>';
+    }).join('');
+    var curShip = L.LOADOUTS.filter(function (l) { return l.key === cur; })[0];
+    return panel('Ship', curShip ? curShip.name : '', '<div class="diffs">' + rows + '</div>');
+  }
   function viewTitle() {
     var saved = savedRun(), rec = record();
     var actions = saved
@@ -1947,6 +2025,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
         '<p class="lead">You fly the Albatross with the last copy of the Star Archive on board. The Syndicate wants it back. Get it to Vega.</p>' +
       '</section>' +
       routeScreen(saved) +
+      panelShips() +
       panelDiff() +
       '<div class="row-actions">' + actions + '</div>' +
       panel('How a Flight Works', '', '<ul class="rules">' +
@@ -2084,17 +2163,25 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
       ((s.rerolls || 0) ? '<p class="note pad">Rolled ' + s.rerolls + '× here. The price resets at the next jump.</p>' : ''));
   }
   function panelUpgrades(s) {
-    function row(what, title, sub) {
+    var SHIP = L.loadoutOf(s);
+    // A track the ship cannot use at all is not "maxed", and saying so reads as
+    // a bug. Say it is not fitted.
+    function row(what, title, sub, blocked, blockedLabel) {
       var c = L.upgradeCost(s, what);
-      var btn = c == null ? '<button class="btn btn-small" disabled>Max.</button>'
+      var btn = blocked ? '<button class="btn btn-small" disabled>' + blockedLabel + '</button>'
+        : c == null ? '<button class="btn btn-small" disabled>Max.</button>'
         : '<button class="btn btn-small" data-a="upg" data-v="' + what + '"' + (s.scrap >= c ? '' : ' disabled') + '>' + cost(c) + '</button>';
       return '<div class="upg"><b>' + title + '</b><span>' + sub + '</span>' + btn + '</div>';
     }
+    var capMax = Math.min(8, SHIP.maxCap);
     return panel('Upgrades', '',
       '<div class="upgs">' +
-      row('shield', 'Shields Level ' + s.shieldLv + (s.shieldLv < 4 ? ' → ' + (s.shieldLv + 1) : ''), s.shieldLv < 4 ? '+1 shield layer' : 'Max level') +
+      (SHIP.noShields
+        ? row('shield', 'Shields', 'This hull has no generator and never will', true, 'None')
+        : row('shield', 'Shields Level ' + s.shieldLv + (s.shieldLv < 4 ? ' → ' + (s.shieldLv + 1) : ''), s.shieldLv < 4 ? '+1 shield layer' : 'Max level')) +
       row('engine', 'Engine Level ' + s.engineLv + (s.engineLv < 6 ? ' → ' + (s.engineLv + 1) : ''), s.engineLv < 6 ? '+5% evasion' : 'Max level') +
-      row('cap', 'Quarters ' + s.cap + (s.cap < 8 ? ' → ' + (s.cap + 1) : '') + ' bunks', s.cap < 8 ? 'Room for one more crew member' : 'All bunks built') +
+      row('cap', 'Quarters ' + s.cap + (s.cap < capMax ? ' → ' + (s.cap + 1) : '') + ' bunks',
+          s.cap < capMax ? 'Room for one more crew member' : 'This hull holds no more') +
       '</div>');
   }
 function viewHangar() {
@@ -2275,6 +2362,7 @@ function viewHangar() {
   }
   function onCombatOver() {
     var c = S.combat;
+    if (c && c.winner === 'p' && c.p.hull >= c.p.maxHull) unlockShip('needle');
     if (!S.result) {
       S.result = L.endCombat(S.run, c);
       if (S.result.dead) { addRecord(false); clearRun(); }
@@ -2454,6 +2542,7 @@ function viewStore() {
   }
   function finishNode() {
     logDone();
+    checkShipUnlocks();
     var up = L.afterNode(S.run);
     resetUi();
     if (up) toast('Jump gate cleared: Sector ' + S.run.sector);
@@ -2479,9 +2568,10 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v9',
+      cache: 'vega-v10',
       when: new Date().toISOString(),
       seed: s.seed,
+      shipName: L.loadoutOf(s).name,
       difficulty: (s.diff || 0) + ' ' + L.diffOf(s).name,
       outcome: s.won ? 'won' : s.dead ? 'lost' : 'in progress',
       at: 'sector ' + s.sector + ', jump ' + s.jump,
@@ -2534,7 +2624,8 @@ function viewStore() {
   }
 
   var ACTIONS = {
-    'new': function () { S.run = L.newRun(pickedDiff()); S.log = []; resetUi(); go('hangar'); },
+    'new': function () { S.run = L.newRun(pickedDiff(), null, pickedShip()); S.log = []; resetUi(); go('hangar'); },
+    'ship': function (v) { if (shipUnlocked(v)) { put(SHIP_KEY, v); render(); } },
     'diff': function (v) { var n = Math.min(+v, unlocked()); put(DIFF_KEY, n); render(); },
     'continue': function () { var r = savedRun(); if (!r) { render(); return; } S.run = r; resetUi(); go('hangar'); },
     'title': function () { resetUi(); go('title'); },
