@@ -1482,7 +1482,7 @@ function makeStore(s) {
     { id: 'mercs', title: 'Mercenary', text: 'A mercenary offers her services.',
       setup: function () { return { t: randomType() }; },
       choices: function (s, ctx) { return [
-        { label: 'Hire', hint: typeLabel(ctx.t), cost: 5, req: function (s) { return s.scrap >= 5 && canRecruit(s, ctx.t.role, ctx.t.origin); }, why: 'No room on board', run: function (s) {
+        { label: 'Hire', hint: typeLabel(ctx.t), cost: 5, req: function (s) { return s.scrap >= 5 && canRecruit(s, ctx.t.role, ctx.t.origin); }, why: function (s) { return s.scrap < 5 ? 'Not enough scrap' : 'No room on board'; }, run: function (s) {
           s.scrap -= 5; return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) };
         } },
         { label: 'Decline', run: function () { return { text: 'She shrugs and looks for another ship.' }; } }
@@ -1526,7 +1526,7 @@ function makeStore(s) {
       ]; } },
     { id: 'guild', title: 'Engineers’ Guild', text: 'A guild offers an engine tune-up at a special price.',
       choices: function () { return [
-        { label: 'Engine +1 level', cost: 5, req: function (s) { return s.scrap >= 5 && s.engineLv < 6; }, why: 'Engine already at maximum', run: function (s) { s.scrap -= 5; s.engineLv++; return { text: 'The engine purrs. Evasion +5%.' }; } },
+        { label: 'Engine +1 level', cost: 5, req: function (s) { return s.scrap >= 5 && s.engineLv < 6; }, why: function (s) { return s.scrap < 5 ? 'Not enough scrap' : 'Engine already at maximum'; }, run: function (s) { s.scrap -= 5; s.engineLv++; return { text: 'The engine purrs. Evasion +5%.' }; } },
         { label: 'Decline', run: function () { return { text: 'Maybe next time.' }; } }
       ]; } },
   { id: 'stowaway', title: 'Stowaway', text: 'A heat signature turns up behind a cargo bulkhead that should be empty.',
@@ -1597,7 +1597,8 @@ function makeStore(s) {
 
   { id: 'capacitor', title: 'Salvaged Capacitor', text: 'A trader offers a scavenged shield capacitor, pulled from a hull nobody will name.',
     choices: function () { return [
-      { label: 'Test-fit it', cost: 6, req: function (s) { return s.scrap >= 6 && s.shieldLv < 4; }, why: 'Shields already at maximum',
+      { label: 'Test-fit it', cost: 6, req: function (s) { return s.scrap >= 6 && s.shieldLv < 4; },
+        why: function (s) { return s.scrap < 6 ? 'Not enough scrap' : 'Shields already at maximum'; },
         run: function (s) {
           s.scrap -= 6;
           if (R.chance(0.6)) { s.shieldLv++; return { text: 'It syncs with your grid on the first try. Shields +1 stage.' }; }
@@ -1706,7 +1707,11 @@ function makeStore(s) {
     var ev = EVENT_BY_ID[inst.id];
     var choices = ev.choices(s, inst.ctx).map(function (ch) {
       var ok = ch.req ? ch.req(s) : true;
-      return { label: ch.label, hint: ch.hint || '', cost: ch.cost || 0, gain: ch.gain || 0, ok: ok, why: ok ? '' : (ch.why || 'Not enough scrap'), run: ch.run };
+      // `why` may be a function: a req that ANDs several conditions needs to say
+      // which one actually failed, or it tells the player the wrong thing.
+      var why = '';
+      if (!ok) why = typeof ch.why === 'function' ? ch.why(s) : (ch.why || 'Not enough scrap');
+      return { label: ch.label, hint: ch.hint || '', cost: ch.cost || 0, gain: ch.gain || 0, ok: ok, why: why, run: ch.run };
     });
     return { title: ev.title, text: ev.text, choices: choices };
   }
@@ -2261,7 +2266,7 @@ function describeTaken(o, r) {
       body = '<div class="choices">' + view.choices.map(function (ch, i) {
         var bits = [];
         if (ch.ok) { if (ch.hint) bits.push(ch.hint); if (ch.cost) bits.push('costs ' + ch.cost + ' scrap'); if (ch.gain) bits.push('+' + ch.gain + ' scrap'); }
-        else bits.push(ch.why);
+        else { bits.push(ch.why); if (ch.cost) bits.push('costs ' + ch.cost + ' scrap'); }
         return '<button class="btn opt" data-a="ev" data-v="' + i + '"' + (ch.ok ? '' : ' disabled') + '><span>' + ch.label + '</span>' + (bits.length ? '<small>' + bits.join(' · ') + '</small>' : '') + '</button>';
       }).join('') + '</div>';
     } else {
@@ -2382,7 +2387,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v7',
+      cache: 'vega-v8',
       when: new Date().toISOString(),
       seed: s.seed,
       difficulty: (s.diff || 0) + ' ' + L.diffOf(s).name,
