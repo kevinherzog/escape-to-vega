@@ -401,6 +401,7 @@ details.more[open] summary { margin-bottom: 6px; }
 @keyframes rise { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(-50%, calc(-50% - 28px)); } }
 .lane-msg { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; z-index: 3; font: 600 12px/1.2 var(--font-data); letter-spacing: 0.14em; text-transform: uppercase; color: var(--screen-ink); pointer-events: none; }
 .lane-msg.intro { animation: fadeout 1.6s ease-in forwards; font: 800 26px/1 var(--font-display); letter-spacing: 0.04em; }
+.lane-rage { position: absolute; right: 8px; top: 8px; z-index: 3; font: 700 10.5px/1 var(--font-data); letter-spacing: 0.1em; color: var(--foe); animation: blink 0.6s steps(2) infinite; }
 .lane-heat { position: absolute; left: 8px; top: 8px; z-index: 3; font: 600 10.5px/1 var(--font-data); letter-spacing: 0.1em; color: var(--foe); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0.25; } }
 @keyframes fadeout { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
@@ -1170,7 +1171,7 @@ function newRun(diff, seedVal, shipKey) {
     var evasion = R.int(0, 4 + sec * 4);
     var wc = sec === 1 ? (s.jump <= 2 ? R.int(1, 2) : 2) : sec === 2 ? 2 : R.int(2, 3);
     var chargeMul = [0, 1.0, 1.1, 1.18][sec];
-    var boarding = null, repairEvery = null;
+    var boarding = null, repairEvery = null, enrage = null;
     var name = R.pick(ENEMY_NAMES[sec]);
     var weapons = [];
     if (type === 'elite') {
@@ -1191,10 +1192,16 @@ function newRun(diff, seedVal, shipKey) {
     for (var i = 0; i < wc; i++) weapons.push(R.pick(ENEMY_POOLS[sec]));
     if (weapons.every(function (k) { return k === 'ion'; })) weapons[0] = 'laser';
     if (type === 'boss') {
+      // The finale was the easiest fight of the last sector: it fired at 0.85
+      // against sector 3's 1.18, carried fewer shields than an average elite and
+      // had a fixed hull the elites had nearly caught by jump 5. It was longer,
+      // not harder. It is now plainly the biggest thing in the run, and it winds
+      // up as it is hurt rather than winding down.
       name = 'Flagship Leviathan';
-      hull = 52; shields = 3; evasion = 10; chargeMul = 0.85;
+      hull = 58; shields = 4; evasion = 10; chargeMul = 0.88;
       weapons = ['flak', 'missile', 'heavy', 'ion'];
       boarding = { dmg: 1, every: 9 }; repairEvery = 12;
+      enrage = { at: 0.5, mul: 1.2 };
     }
     // Difficulty scaling is applied last so it also reaches the elite, guardian
     // and boss branches above, which overwrite their own hull and shield values.
@@ -1204,7 +1211,7 @@ function newRun(diff, seedVal, shipKey) {
     var ramp = sec === 1 ? 0.4 : sec === 2 ? 0.75 : 1;
     hull = Math.round(hull * (1 + (D.ehull - 1) * ramp));
     shields += sec === 1 ? 0 : Math.round(D.eshield * ramp);
-    return { name: name, hull: hull, maxHull: hull, shieldMax: shields, shieldRegen: C.SHIELD_REGEN, evasion: evasion, weapons: weapons, chargeMul: chargeMul, boarding: boarding, repairEvery: repairEvery, bonusShields: 0, startCharge: 0, veteran: veteran };
+    return { name: name, hull: hull, maxHull: hull, shieldMax: shields, shieldRegen: C.SHIELD_REGEN, evasion: evasion, weapons: weapons, chargeMul: chargeMul, boarding: boarding, repairEvery: repairEvery, bonusShields: 0, startCharge: 0, veteran: veteran, enrage: enrage };
   }
 
   // ---------- Combat ----------
@@ -1218,7 +1225,7 @@ function side(cfg) {
       chargeMul: cfg.chargeMul,
       w: cfg.weapons.map(function (k) { return { k: k, p: cfg.startCharge || 0, jam: 0 }; }),   // NEW jam
       boarding: cfg.boarding, boardT: 0,
-      repairEvery: cfg.repairEvery, repairT: 0, veteran: cfg.veteran || false,
+      repairEvery: cfg.repairEvery, repairT: 0, veteran: cfg.veteran || false, enrage: cfg.enrage || null,
       repairAmt: cfg.repairAmt || 1,          // NEW
       rel: cfg.rel || null, casCD: 0          // NEW
     };
@@ -1325,7 +1332,10 @@ function tickSide(c, a, b, who, dt) {
     for (var i = 0; i < a.w.length; i++) {
       var w = a.w[i];
       if (w.jam > 0) { w.jam = Math.max(0, w.jam - dt); continue; }            // Ion Spike
-      w.p += dt * a.chargeMul / WEAPONS[w.k].charge;
+      // a wounded ship with an enrage clause fires faster the worse it gets
+      var cm = a.chargeMul;
+      if (a.enrage && a.hull > 0 && a.hull <= a.maxHull * a.enrage.at) cm *= a.enrage.mul;
+      w.p += dt * cm / WEAPONS[w.k].charge;
       if (w.p >= 1) { w.p -= 1; fire(c, who, w.k); }
     }
     var other = who === 'p' ? 'e' : 'p';
@@ -2239,6 +2249,7 @@ function viewHangar() {
       sidePanel(c.e, 'e') +
       '<div class="screen lane" id="lane" aria-hidden="true">' +
         '<div class="lane-heat" id="heat" hidden>Shields overheating</div>' +
+        '<div class="lane-rage" id="rage" hidden>Leviathan enraged</div>' +
         '<div class="ship ship-e' + (c.type === 'boss' ? ' boss' : '') + '" id="ship-e"><div class="bubble bonus" id="bb-e"></div><div class="bubble" id="bu-e"></div>' + (c.type === 'boss' ? SHIP_B : SHIP_E) + '</div>' +
         '<div class="ship ship-p" id="ship-p"><div class="bubble bonus" id="bb-p"></div><div class="bubble" id="bu-p"></div>' + SHIP_P + '</div>' +
         '<div class="shots" id="shots"></div><div class="fxl" id="fxl"></div>' +
@@ -2260,7 +2271,7 @@ function viewHangar() {
     };
   }
   function bindCombat() {
-    refs = { shots: $('#shots'), fxl: $('#fxl'), heat: $('#heat'), cend: $('#cend'), flee: $('#flee'), fleefill: $('#fleefill'), fleetxt: $('#fleetxt'), e: sideRefs('e'), p: sideRefs('p') };
+    refs = { shots: $('#shots'), fxl: $('#fxl'), heat: $('#heat'), rage: $('#rage'), cend: $('#cend'), flee: $('#flee'), fleefill: $('#fleefill'), fleetxt: $('#fleetxt'), e: sideRefs('e'), p: sideRefs('p') };
     shotEls = {};
   }
   function pipsHtml(sd) {
@@ -2291,6 +2302,10 @@ function viewHangar() {
     drawShots(c);
     while (c.fx.length) spawnFx(c.fx.shift());
     refs.heat.hidden = L.heatFactor(c) <= 1 || c.over;
+    if (refs.rage) {
+      var e = c.e;
+      refs.rage.hidden = !(e.enrage && e.hull > 0 && e.hull <= e.maxHull * e.enrage.at) || c.over;
+    }
     if (refs.flee) {
       refs.fleefill.style.transform = 'scaleX(' + c.flee.toFixed(3) + ')';
       var ready = c.flee >= 1 && !c.over;
@@ -2581,7 +2596,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v12',
+      cache: 'vega-v13',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
