@@ -932,6 +932,41 @@ function newRun(diff, seedVal) {
     syncHull(s);
     return { member: merged || m, merged: !!merged };
   }
+  // How many unsold copies of this exact type the shop is offering right now.
+  function shopCopies(s, role, origin) {
+    return s.shop.filter(function (o) { return !o.sold && o.role === role && o.origin === origin; }).length;
+  }
+  // Buying one at a time blocks a merge you could clearly afford: with bunks
+  // full and one copy aboard, two more in the shop would merge all three into a
+  // single two-star and leave the bunk count exactly where it started, but each
+  // individual purchase is refused for being over cap. This plans the whole
+  // transaction so it can be taken atomically.
+  function mergeBuyPlan(s, role, origin) {
+    var aboard = copies(s, role, origin, 1);
+    var need = 3 - aboard;
+    if (need < 2) return null;                      // a single buy already works
+    if (need > shopCopies(s, role, origin)) return null;
+    if (s.crew.length + need - 2 > s.cap) return null;   // still overflows after merging
+    var cost = need * C.CREW_PRICE;
+    if (s.scrap < cost) return null;
+    return { need: need, cost: cost };
+  }
+  function buyMerge(s, role, origin) {
+    var plan = mergeBuyPlan(s, role, origin);
+    if (!plan) return null;
+    s.scrap -= plan.cost;
+    var bought = 0;
+    for (var i = 0; i < s.shop.length && bought < plan.need; i++) {
+      var o = s.shop[i];
+      if (o.sold || o.role !== role || o.origin !== origin) continue;
+      o.sold = true;
+      s.crew.push(makeCrew(s, role, origin, 1));
+      bought++;
+    }
+    var merged = mergeCheck(s, role, origin);
+    syncHull(s);
+    return { member: merged, merged: !!merged, spent: plan.cost, bought: bought };
+  }
   function buyCrew(s, idx) {
     var o = s.shop[idx];
     if (!o || o.sold || s.scrap < C.CREW_PRICE || !canRecruit(s, o.role, o.origin)) return null;
@@ -1687,7 +1722,7 @@ function makeStore(s) {
     SYNERGIES: SYNERGIES, WEAPONS: WEAPONS, NODES: NODES, EVENTS: EVENTS,
     seed: seed, unseed: unseed, R: R,
     newRun: newRun, counts: counts, tierOf: tierOf, maxHull: maxHull, syncHull: syncHull, derive: derive, roleEffect: roleEffect,
-    rollShop: rollShop, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
+    rollShop: rollShop, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, shopCopies: shopCopies, mergeBuyPlan: mergeBuyPlan, buyMerge: buyMerge, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
     upgradeCost: upgradeCost, upgrade: upgrade,
     weaponValue: weaponValue, sellWeapon: sellWeapon, replaceWeapon: replaceWeapon, giveWeapon: giveWeapon,
     genBeacons: genBeacons, interest: interest, jumpTo: jumpTo, afterNode: afterNode, dock: dock,
@@ -1946,10 +1981,25 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
         }
       }
       var can = L.canRecruit(s, o.role, o.origin), afford = s.scrap >= C.CREW_PRICE;
+      // When bunks are full you cannot buy copies one at a time even if taking
+      // them together would merge and cost you no bunk at all. Offer the whole
+      // transaction as one button.
+      var plan = L.mergeBuyPlan(s, o.role, o.origin);
+      if (plan) {
+        // the actionable badge replaces the "merges only" warning, which is
+        // just noise once the merge itself is being offered
+        badges = badges.replace('<span class="badge">Already aboard · merges only</span>', '');
+        badges += '<span class="badge hot">Buy ' + plan.need + ' · Upgrade ★★</span>';
+      }
+      // A duplicate type is only worth anything as merge fodder now, so when the
+      // whole merge is on the table that is the action to offer, full bunks or not.
+      var btn = plan
+        ? '<button class="btn btn-small btn-primary" data-a="buymerge" data-v="' + i + '" aria-label="Buy ' + plan.need + ' and upgrade for ' + plan.cost + ' scrap">' + cost(plan.cost) + '</button>'
+        : '<button class="btn btn-small' + (merge ? ' btn-primary' : '') + '" data-a="buy" data-v="' + i + '"' + (can && afford ? '' : ' disabled') + ' aria-label="Hire for ' + C.CREW_PRICE + ' scrap">' + (can ? cost(C.CREW_PRICE) : 'Full') + '</button>';
       return '<div class="offer"><span class="otype">' + tags(o.role, o.origin) + '</span>' +
         '<span class="oeff">' + L.roleEffect(o.role, 1) + '</span>' +
         (badges ? '<span class="obadges">' + badges + '</span>' : '') +
-        '<button class="btn btn-small' + (merge ? ' btn-primary' : '') + '" data-a="buy" data-v="' + i + '"' + (can && afford ? '' : ' disabled') + ' aria-label="Hire for ' + C.CREW_PRICE + ' scrap">' + (can ? cost(C.CREW_PRICE) : 'Full') + '</button></div>';
+        btn + '</div>';
     }).join('');
     return panel('Recruit', 'new selection each jump',
       '<div class="offers">' + rows + '</div>' +
@@ -2332,7 +2382,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v6',
+      cache: 'vega-v7',
       when: new Date().toISOString(),
       seed: s.seed,
       difficulty: (s.diff || 0) + ' ' + L.diffOf(s).name,
@@ -2414,6 +2464,14 @@ function viewStore() {
       var r = L.buyCrew(S.run, +v);
       if (!r) return;
       toast(r.merged ? r.member.name + ' merges: now ' + r.member.stars + ' stars' : r.member.name + ' is on board');
+      render();
+    },
+    'buymerge': function (v) {
+      var o = S.run.shop[+v];
+      if (!o) return;
+      var r = L.buyMerge(S.run, o.role, o.origin);
+      if (!r) return;
+      toast(r.member ? r.member.name + ' merges: now ' + r.member.stars + ' stars' : 'Crew merged');
       render();
     },
     'reroll': function () { if (L.reroll(S.run)) render(); },
