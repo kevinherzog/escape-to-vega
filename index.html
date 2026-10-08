@@ -607,10 +607,31 @@ var VEGA = (function () {
     chorus:   { key: 'chorus',   tier: 3, name: 'Chorus Engine',
                 desc: 'While 4 of one origin are aboard: +40 % weapon charge and +2 shield layers.', charge: 0.40, shield: 2 },
     prism:    { key: 'prism',    tier: 3, name: 'Prism Lens',
-                desc: 'Your beams fire twice and ignore 2 enemy shields.', pierce: 2 }
+                desc: 'Your beams fire twice and ignore 2 enemy shields.', pierce: 2 },
+
+    /* ---- added so the broker has a shelf worth rotating ---- */
+    plating:  { key: 'plating',  tier: 1, name: 'Ablative Plating',
+                desc: '+12 maximum hull.', hull: 12 },
+    gyro:     { key: 'gyro',     tier: 1, name: 'Gyro Stabiliser',
+                desc: '+8 % evasion.', evasion: 8 },
+    loader:   { key: 'loader',   tier: 1, name: 'Loader Rig',
+                desc: 'Weapons begin every fight 35 % charged.', start: 0.35 },
+    fieldkit: { key: 'fieldkit', tier: 1, name: 'Field Kit',
+                desc: '+6 hull after every won fight.', heal: 6 },
+    furnace:  { key: 'furnace',  tier: 2, name: 'Scrap Furnace',
+                desc: 'Every won fight pays 4 extra scrap.', scrap: 4 },
+    twinfeed: { key: 'twinfeed', tier: 2, name: 'Twin Feed',
+                desc: 'Weapons charge 18 % faster.', charge: 0.18 },
+    battery:  { key: 'battery',  tier: 2, name: 'Spare Battery',
+                desc: '+1 extra shield, and extra shields recharge during a fight.', bonus: 1 },
+    dread:    { key: 'dread',    tier: 3, name: 'Dreadnought Core',
+                desc: '+25 maximum hull and +1 shield layer, but weapons charge 15 % slower.',
+                hull: 25, shield: 1, charge: -0.15 }
   };
 
-  var RELIC_KEYS = ['lathe', 'ledger', 'welder', 'veil', 'blackbox', 'coil', 'spike', 'cascade', 'reactor', 'hive', 'chorus', 'prism'];
+  var RELIC_KEYS = ['lathe', 'ledger', 'welder', 'veil', 'blackbox', 'plating', 'gyro', 'loader', 'fieldkit',
+                    'coil', 'spike', 'cascade', 'reactor', 'furnace', 'twinfeed', 'battery',
+                    'hive', 'chorus', 'prism', 'dread'];
   var RELIC_PRICE = { 1: 12, 2: 20, 3: 32 };
   /* Drop weight per tier, by sector: commons early, legendaries late. Tier 3 is
      kept deliberately scarce — these are the run-breaking payoffs, and they are
@@ -661,6 +682,7 @@ var VEGA = (function () {
     shop:     { name: 'Trading Post',     hint: 'Weapons, repairs, weapon slot' },
     dock:     { name: 'Space Dock',       hint: '+12 hull free' },
     guardian: { name: 'Sector Guardian',  hint: 'Guards the jump gate to the next sector' },
+    broker:   { name: 'Relic Broker',     hint: 'Relics at a premium. Bring scrap' },
     boss:     { name: 'Flagship Leviathan', hint: 'The last hurdle before Vega' }
   };
 
@@ -704,7 +726,12 @@ var VEGA = (function () {
   }
   function tierOf(cnt, key) { var n = cnt[key] || 0; return n >= 4 ? 2 : n >= 2 ? 1 : 0; }
   function rockBonus(s) { var t = tierOf(counts(s), 'rock'); return t === 2 ? 20 : t === 1 ? 8 : 0; }
-  function maxHull(s) { return s.baseMaxHull + rockBonus(s); }
+  function relicHull(s) {
+    var n = 0;
+    (s.relics || []).forEach(function (k) { if (RELICS[k] && RELICS[k].hull) n += RELICS[k].hull; });
+    return n;
+  }
+  function maxHull(s) { return s.baseMaxHull + rockBonus(s) + relicHull(s); }
   function syncHull(s) {
     // Crystallines raise maximum hull; they do not heal. Previously the current
     // hull was topped up whenever the bonus rose but only clamped when it fell,
@@ -809,6 +836,15 @@ function derive(s) {
     }
 
 
+    // relics that only adjust the derived numbers, rather than needing a
+    // hook inside the combat loop
+    if (hasRelic(s, 'gyro')) evasion += RELICS.gyro.evasion;
+    if (hasRelic(s, 'loader')) startCharge = Math.max(startCharge, RELICS.loader.start);
+    if (hasRelic(s, 'twinfeed')) chargeMul += RELICS.twinfeed.charge;
+    if (hasRelic(s, 'battery')) bonusShields += RELICS.battery.bonus;
+    if (hasRelic(s, 'dread')) { shieldMax += RELICS.dread.shield; chargeMul += RELICS.dread.charge; }
+    if (chargeMul < 0.3) chargeMul = 0.3;
+
     return {
 
       chargeMul: chargeMul,
@@ -827,9 +863,9 @@ function derive(s) {
 
       startCharge: startCharge,
 
-      healAfter: te === 2 ? 8 : te === 1 ? 4 : 0,
+      healAfter: (te === 2 ? 8 : te === 1 ? 4 : 0) + (hasRelic(s, 'fieldkit') ? RELICS.fieldkit.heal : 0),
 
-      scrapBonus: th === 2 ? 5 : th === 1 ? 2 : 0,
+      scrapBonus: (th === 2 ? 5 : th === 1 ? 2 : 0) + (hasRelic(s, 'furnace') ? RELICS.furnace.scrap : 0),
 
       repairAmt: repairAmt,          // NEW
 
@@ -879,6 +915,7 @@ function newRun(diff, seedVal) {
       crew: [], cap: 4,
       scrap: 10 + D.scrap,
       relics: [],                    // NEW - array of RELICS keys, JSON-safe
+      rerolls: 0,
       shop: [], beacons: [],
       node: null,
       usedEvents: [],
@@ -984,9 +1021,16 @@ function newRun(diff, seedVal) {
     syncHull(s);
     return v;
   }
+  // Rolling the recruit list is the game's money sink. A flat price made it a
+  // non-decision; escalating within a stop means hunting a third copy for a
+  // merge costs real money and competes with everything else you wanted.
+  // The counter resets on every jump, so each stop starts cheap again.
+  function rerollPrice(s) { return C.REROLL_PRICE * ((s.rerolls || 0) + 1); }
   function reroll(s) {
-    if (s.scrap < C.REROLL_PRICE) return false;
-    s.scrap -= C.REROLL_PRICE;
+    var p = rerollPrice(s);
+    if (s.scrap < p) return false;
+    s.scrap -= p;
+    s.rerolls = (s.rerolls || 0) + 1;
     rollShop(s);
     return true;
   }
@@ -1033,7 +1077,8 @@ function newRun(diff, seedVal) {
   // ---------- Star map ----------
   function genBeacons(s) {
     if (s.jump >= C.SECTOR_LEN) return [{ type: s.sector >= C.SECTORS ? 'boss' : 'guardian' }];
-    var w = { fight: 40, event: 28, shop: 12, dock: 8, elite: (s.sector > 1 || s.jump >= 2) ? 12 + diffOf(s).elite : 0 };
+    var w = { fight: 40, event: 28, shop: 12, dock: 8, elite: (s.sector > 1 || s.jump >= 2) ? 12 + diffOf(s).elite : 0,
+              broker: s.sector >= 2 ? 10 : 0 };
     if (s.jump === 0) w.dock = 0;
     var n = R.chance(0.55) ? 3 : 2;
     var out = [];
@@ -1056,6 +1101,7 @@ function newRun(diff, seedVal) {
     var gain = interest(s);
     s.scrap += gain; s.stats.scrap += gain;
     s.jump++; s.stats.jumps++;
+    s.rerolls = 0;
     rollShop(s);
     s.node = { type: b.type };
     return { type: b.type, interest: gain };
@@ -1341,6 +1387,31 @@ function takeLoot(s, o) {
   }
 
   // ---------- Trading post ----------
+  // The broker is the thing worth banking for: relics at roughly double a
+  // trading post's asking price, three on the shelf, no weapons and no repairs.
+  // It only appears from sector 2, by which point one is plausibly affordable.
+  var BROKER_MARKUP = 1.9;
+  function brokerPrice(k) { return Math.round(relicPrice(k) * BROKER_MARKUP); }
+  function makeBroker(s) {
+    var offers = [];
+    for (var i = 0; i < 3; i++) {
+      var k = rollRelic(s, 1);
+      if (!k) continue;
+      var dup = false;
+      for (var j = 0; j < offers.length; j++) if (offers[j].k === k) dup = true;
+      if (dup) continue;
+      offers.push({ k: k, sold: false, price: brokerPrice(k) });
+    }
+    return { offers: offers };
+  }
+  function brokerBuy(s, st, i) {
+    var o = st.offers[i];
+    if (!o || o.sold || s.scrap < o.price || hasRelic(s, o.k)) return null;
+    s.scrap -= o.price;
+    o.sold = true;
+    addRelic(s, o.k);
+    return { ok: true, relic: RELICS[o.k] };
+  }
 function makeStore(s) {
     var POOLS = {
       1: ['laser', 'burst', 'heavy', 'ion', 'missile', 'beam', 'mining', 'lance'],
@@ -1727,13 +1798,13 @@ function makeStore(s) {
     SYNERGIES: SYNERGIES, WEAPONS: WEAPONS, NODES: NODES, EVENTS: EVENTS,
     seed: seed, unseed: unseed, R: R,
     newRun: newRun, counts: counts, tierOf: tierOf, maxHull: maxHull, syncHull: syncHull, derive: derive, roleEffect: roleEffect,
-    rollShop: rollShop, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, shopCopies: shopCopies, mergeBuyPlan: mergeBuyPlan, buyMerge: buyMerge, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
+    rollShop: rollShop, rerollPrice: rerollPrice, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, shopCopies: shopCopies, mergeBuyPlan: mergeBuyPlan, buyMerge: buyMerge, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
     upgradeCost: upgradeCost, upgrade: upgrade,
     weaponValue: weaponValue, sellWeapon: sellWeapon, replaceWeapon: replaceWeapon, giveWeapon: giveWeapon,
     genBeacons: genBeacons, interest: interest, jumpTo: jumpTo, afterNode: afterNode, dock: dock,
     makeEnemy: makeEnemy, startCombat: startCombat, heatFactor: heatFactor, stepCombat: stepCombat, flee: flee, endCombat: endCombat,
     makeLoot: makeLoot, takeLoot: takeLoot,
-    makeStore: makeStore, storeBuy: storeBuy, repair: repair, buySlot: buySlot,
+    makeStore: makeStore, makeBroker: makeBroker, brokerBuy: brokerBuy, brokerPrice: brokerPrice, storeBuy: storeBuy, repair: repair, buySlot: buySlot,
     DIFFS: DIFFS, diffOf: diffOf, repairPrice: repairPrice,
     RELICS: RELICS, RELIC_KEYS: RELIC_KEYS,
     hasRelic: hasRelic, addRelic: addRelic, rollRelic: rollRelic,
@@ -1758,7 +1829,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     run: null, screen: 'title',
     combat: null, result: null,
     event: null, eventOut: null,
-    store: null, reward: null, replace: null, dockHeal: 0,
+    store: null, broker: null, reward: null, replace: null, dockHeal: 0,
     sel: { crew: null, weapon: null },
     synOpen: false,
     speed: 2,
@@ -1790,7 +1861,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   // ---------- Building blocks ----------
   var ROLE_IC = { gunner: 'i-gunner', pilot: 'i-pilot', tech: 'i-tech', engineer: 'i-engineer' };
   var ORIGIN_IC = { human: 'i-human', rock: 'i-rock', bug: 'i-bug', spark: 'i-spark' };
-  var NODE_IC = { fight: 'i-fight', elite: 'i-elite', event: 'i-event', shop: 'i-shop', dock: 'i-dock', guardian: 'i-guardian', boss: 'i-boss' };
+  var NODE_IC = { fight: 'i-fight', elite: 'i-elite', event: 'i-event', shop: 'i-shop', dock: 'i-dock', broker: 'i-coin', guardian: 'i-guardian', boss: 'i-boss' };
   var RELIC_IC = {
     lathe: 'i-scrap', ledger: 'i-coin', welder: 'i-engineer', veil: 'i-pilot', blackbox: 'i-event',
     coil: 'i-tech', spike: 'i-spark', cascade: 'i-spark', reactor: 'i-scrap',
@@ -2009,7 +2080,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     return panel('Recruit', 'new selection each jump',
       '<div class="offers">' + rows + '</div>' +
       (full ? '<p class="note pad">All bunks full. Expand quarters or dismiss someone. A third matching crew member always fits, since it merges.</p>' : '') +
-      '<button class="btn" data-a="reroll"' + (s.scrap >= C.REROLL_PRICE ? '' : ' disabled') + '>New Selection ' + cost(C.REROLL_PRICE) + '</button>');
+      '<button class="btn" data-a="reroll"' + (s.scrap >= L.rerollPrice(s) ? '' : ' disabled') + '>New Selection ' + cost(L.rerollPrice(s)) + '</button>' +
+      ((s.rerolls || 0) ? '<p class="note pad">Rolled ' + s.rerolls + '× here. The price resets at the next jump.</p>' : ''));
   }
   function panelUpgrades(s) {
     function row(what, title, sub) {
@@ -2278,6 +2350,25 @@ function describeTaken(o, r) {
   }
 
   // ---------- Trading post ----------
+  function viewBroker() {
+    var s = S.run, st = S.broker;
+    var rows = st.offers.map(function (o, i) {
+      var R = L.RELICS[o.k], owned = (s.relics || []).indexOf(o.k) >= 0;
+      var can = !o.sold && !owned && s.scrap >= o.price;
+      return '<div class="offer' + (o.sold || owned ? ' sold' : '') + '">' +
+        '<span class="otype">' + ic(RELIC_IC[o.k] || 'i-spark') + R.name + relicBadge(R) + '</span>' +
+        '<span class="oeff">' + R.desc + '</span>' +
+        (o.sold ? '<button class="btn btn-small" disabled>Bought</button>'
+          : owned ? '<button class="btn btn-small" disabled>Owned</button>'
+          : '<button class="btn btn-small" data-a="bbuy" data-v="' + i + '"' + (can ? '' : ' disabled') + '>' + cost(o.price) + '</button>') +
+        '</div>';
+    }).join('');
+    return topBar() +
+      panel('Relic Broker', 'premium prices',
+        '<p class="note pad">He deals in nothing else and he does not haggle. Scrap you were saving is the only way through this door.</p>' +
+        '<div class="offers">' + (rows || '<p class="note pad">The shelf is bare. You already carry everything he could get hold of.</p>') + '</div>') +
+      footBar('Relics are permanent for the rest of the run.', '<button class="btn btn-primary" data-a="bdone">Undock ' + ic('i-go') + '</button>');
+  }
 function viewStore() {
     var s = S.run, st = S.store, mh = L.maxHull(s);
     var offers = st.offers.map(function (o, i) {
@@ -2349,7 +2440,7 @@ function viewStore() {
 
   // ---------- Flow ----------
   function resetUi() {
-    S.combat = null; S.result = null; S.event = null; S.eventOut = null; S.store = null; S.reward = null; S.replace = null;
+    S.combat = null; S.result = null; S.event = null; S.eventOut = null; S.store = null; S.broker = null; S.reward = null; S.replace = null;
     S.sel = { crew: null, weapon: null };
     loopId++;
   }
@@ -2358,6 +2449,7 @@ function viewStore() {
     if (type === 'fight' || type === 'elite' || type === 'guardian' || type === 'boss') startFight(type, {});
     else if (type === 'event') { S.event = L.startEvent(S.run); S.eventOut = null; go('event'); }
     else if (type === 'shop') { S.store = L.makeStore(S.run); go('store'); }
+    else if (type === 'broker') { S.broker = L.makeBroker(S.run); go('broker'); }
     else { S.dockHeal = L.dock(S.run); go('dock'); }
   }
   function finishNode() {
@@ -2387,7 +2479,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v8',
+      cache: 'vega-v9',
       when: new Date().toISOString(),
       seed: s.seed,
       difficulty: (s.diff || 0) + ' ' + L.diffOf(s).name,
@@ -2423,7 +2515,7 @@ function viewStore() {
     while (box.children.length > 3) box.removeChild(box.firstChild);
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2700);
   }
-  var VIEWS = { 'export': viewExport, title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
+  var VIEWS = { 'export': viewExport, broker: viewBroker, title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
   function render() {
     if (S.screen !== 'title' && !S.run) S.screen = 'title';
     document.getElementById('app').innerHTML = VIEWS[S.screen]();
@@ -2537,6 +2629,13 @@ function viewStore() {
     toast(r.relic.name + ' bolted on');
     render();
   },
+    'bbuy': function (v) {
+      var r = L.brokerBuy(S.run, S.broker, +v);
+      if (!r) return;
+      toast(r.relic.name + ' bolted on');
+      render();
+    },
+    'bdone': function () { finishNode(); },
     'srep': function () { if (L.repair(S.run)) render(); },
     'sslot': function () { if (L.buySlot(S.run)) { toast('Fourth weapon slot installed'); render(); } },
     'sdone': function () { finishNode(); },
