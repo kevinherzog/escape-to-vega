@@ -217,6 +217,10 @@ button.wrow { cursor: pointer; }
 details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); padding-block: 4px; }
 details.more[open] summary { margin-bottom: 6px; }
 
+/* ---------- Run report ---------- */
+.exportbox { width: 100%; font: 500 11px/1.4 var(--font-data); background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r); padding: 8px; resize: vertical; -webkit-user-select: text; user-select: text; }
+
 /* ---------- Difficulty picker ---------- */
 .diffs { display: flex; flex-direction: column; gap: 6px; }
 .diffrow { align-items: flex-start; text-align: left; flex-direction: column; gap: 2px; padding: 10px 12px; }
@@ -691,9 +695,11 @@ var VEGA = (function () {
   function rockBonus(s) { var t = tierOf(counts(s), 'rock'); return t === 2 ? 20 : t === 1 ? 8 : 0; }
   function maxHull(s) { return s.baseMaxHull + rockBonus(s); }
   function syncHull(s) {
-    var b = rockBonus(s), d = b - s.rockApplied;
-    if (d > 0) s.hull += d;
-    s.rockApplied = b;
+    // Crystallines raise maximum hull; they do not heal. Previously the current
+    // hull was topped up whenever the bonus rose but only clamped when it fell,
+    // so dismissing a crystalline and re-hiring one refilled 8 hull (20 at four
+    // aboard) for a couple of scrap, repeatable, and cheaper than the repair bay.
+    s.rockApplied = rockBonus(s);
     s.hull = Math.min(s.hull, maxHull(s));
   }
 function derive(s) {
@@ -845,10 +851,15 @@ function derive(s) {
   function repairPrice(s) { return C.REPAIR_PRICE + diffOf(s).repair; }
 
   // ---------- New run ----------
-function newRun(diff) {
+function newRun(diff, seedVal) {
     var D = DIFFS[diff] || DIFFS[0];
+    // Every run gets a recorded seed, so a run report can be replayed. Pass one
+    // in to repeat a specific run.
+    var sd = (seedVal == null ? (Math.random() * 4294967296) : seedVal) >>> 0;
+    seed(sd);
     var s = {
       v: 1,
+      seed: sd,
       diff: D.lv,
       sector: 1, jump: 0,
       hull: C.START_HULL + D.hull, baseMaxHull: C.START_HULL + D.hull, rockApplied: 0,
@@ -1203,8 +1214,11 @@ function tickSide(c, a, b, who, dt) {
     c.shots = c.shots.filter(function (sh) { sh.left -= dt; if (sh.left <= 0) { landed.push(sh); return false; } return true; });
     landed.forEach(function (sh) { land(c, sh); });
     if (c.canFlee) c.flee = Math.min(1, c.flee + dt / C.FLEE_CHARGE);
-    if (c.e.hull <= 0) { c.e.hull = 0; c.over = true; c.winner = 'p'; }
-    else if (c.p.hull <= 0) { c.p.hull = 0; c.over = true; c.winner = 'e'; }
+    // Your own destruction is checked first. Testing the enemy first meant that
+    // when both hulls hit zero on the same tick you were declared the winner and
+    // sailed on with a hull of 0, which is not a state the rest of the game expects.
+    if (c.p.hull <= 0) { c.p.hull = 0; c.e.hull = Math.max(0, c.e.hull); c.over = true; c.winner = 'e'; }
+    else if (c.e.hull <= 0) { c.e.hull = 0; c.over = true; c.winner = 'p'; }
   }
   function flee(c) {
     if (!c.canFlee || c.flee < 1 || c.over) return false;
@@ -1692,7 +1706,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     sel: { crew: null, weapon: null },
     synOpen: false,
     speed: 2,
-    diff: 0
+    diff: 0,
+    log: [], exportText: null
   };
 
   // ---------- Storage (all optional) ----------
@@ -1938,6 +1953,7 @@ function viewHangar() {
     return topBar() + panelShip(s, d) + panelWeapons(s, d) + panelCrew(s) + panelSynergies(s) +
       panelRelics(s) + panelRecruit(s) + panelUpgrades(s) +
       footBar(gain ? 'Interest on next jump: <b class="num">+' + gain + '</b>' : 'Interest kicks in at 10 scrap.',
+        '<button class="btn btn-small" data-a="export" aria-label="Copy run report">' + ic('i-event') + '</button>' +
         '<button class="btn btn-primary" data-a="map">Star Map ' + ic('i-go') + '</button>');
   }
 
@@ -2238,7 +2254,8 @@ function viewStore() {
   function endStats(s) {
     var items = [['Wins', s.stats.wins], ['Escapes', s.stats.fled], ['Scrap collected', s.stats.scrap], ['Jumps', s.stats.jumps]];
     var crew = s.crew.map(function (m) { return m.name + ' ' + new Array(m.stars + 1).join('★'); }).join(', ');
-    return panel('Logbook', '', '<dl class="stats">' + items.map(function (it) { return '<div class="stat"><dt>' + it[0] + '</dt><dd>' + it[1] + '</dd></div>'; }).join('') + '</dl><p class="note pad">Crew: ' + crew + '</p>');
+    return panel('Logbook', '', '<dl class="stats">' + items.map(function (it) { return '<div class="stat"><dt>' + it[0] + '</dt><dd>' + it[1] + '</dd></div>'; }).join('') + '</dl><p class="note pad">Crew: ' + crew + '</p>' +
+      '<button class="btn" data-a="export">Copy run report</button>');
   }
   function viewOver() {
     var s = S.run;
@@ -2260,16 +2277,67 @@ function viewStore() {
     loopId++;
   }
   function enterNode(type) {
+    logNode(type);
     if (type === 'fight' || type === 'elite' || type === 'guardian' || type === 'boss') startFight(type, {});
     else if (type === 'event') { S.event = L.startEvent(S.run); S.eventOut = null; go('event'); }
     else if (type === 'shop') { S.store = L.makeStore(S.run); go('store'); }
     else { S.dockHeal = L.dock(S.run); go('dock'); }
   }
   function finishNode() {
+    logDone();
     var up = L.afterNode(S.run);
     resetUi();
     if (up) toast('Jump gate cleared: Sector ' + S.run.sector);
     go('hangar');
+  }
+  // ---------- Run report ----------
+  // A compact trail of what happened, so a finished or broken run can be pasted
+  // into a bug report instead of described from memory. The seed makes it replayable.
+  function logNode(type) {
+    if (!S.run) return;
+    S.log.push({ sec: S.run.sector, jump: S.run.jump, node: type });
+  }
+  function logDone(outcome) {
+    var e = S.log[S.log.length - 1];
+    if (!e || !S.run) return;
+    if (outcome) e.out = outcome;
+    e.hull = S.run.hull;
+    e.scrap = S.run.scrap;
+    e.crew = S.run.crew.length;
+    e.relics = (S.run.relics || []).length;
+  }
+  function runReport() {
+    var s = S.run, d = L.derive(s);
+    return {
+      game: 'Escape to Vega',
+      cache: 'vega-v4',
+      when: new Date().toISOString(),
+      seed: s.seed,
+      difficulty: (s.diff || 0) + ' ' + L.diffOf(s).name,
+      outcome: s.won ? 'won' : s.dead ? 'lost' : 'in progress',
+      at: 'sector ' + s.sector + ', jump ' + s.jump,
+      hull: s.hull + '/' + L.maxHull(s),
+      scrap: s.scrap,
+      ship: { shieldLv: s.shieldLv, engineLv: s.engineLv, bunks: s.cap, slots: s.slots },
+      weapons: s.weapons.slice(),
+      crew: s.crew.map(function (m) { return m.role + '/' + m.origin + ' ' + m.stars + '*'; }),
+      relics: (s.relics || []).slice(),
+      derived: {
+        shieldMax: d.shieldMax, bonusShields: d.bonusShields, evasion: d.evasion,
+        chargeMul: +d.chargeMul.toFixed(3), shieldRegen: +d.shieldRegen.toFixed(2),
+        repairEvery: d.repairEvery, boarding: d.boarding
+      },
+      stats: s.stats,
+      ua: navigator.userAgent,
+      log: S.log
+    };
+  }
+  function viewExport() {
+    return topBar() +
+      panel('Run Report', 'for bug reports', '<p class="note pad">Copied to the clipboard if your browser allowed it. Otherwise tap the box, select all, and copy.</p>' +
+        '<textarea class="exportbox" readonly rows="14">' +
+        S.exportText.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</textarea>') +
+      footBar('Seed ' + S.run.seed + ' replays this run.', '<button class="btn btn-primary" data-a="exportback">Back ' + ic('i-go') + '</button>');
   }
   function toast(msg) {
     var box = document.getElementById('toasts'), el = document.createElement('div');
@@ -2278,7 +2346,7 @@ function viewStore() {
     while (box.children.length > 3) box.removeChild(box.firstChild);
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2700);
   }
-  var VIEWS = { title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
+  var VIEWS = { 'export': viewExport, title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
   function render() {
     if (S.screen !== 'title' && !S.run) S.screen = 'title';
     document.getElementById('app').innerHTML = VIEWS[S.screen]();
@@ -2297,10 +2365,21 @@ function viewStore() {
   }
 
   var ACTIONS = {
-    'new': function () { S.run = L.newRun(pickedDiff()); resetUi(); go('hangar'); },
+    'new': function () { S.run = L.newRun(pickedDiff()); S.log = []; resetUi(); go('hangar'); },
     'diff': function (v) { var n = Math.min(+v, unlocked()); put(DIFF_KEY, n); render(); },
     'continue': function () { var r = savedRun(); if (!r) { render(); return; } S.run = r; resetUi(); go('hangar'); },
     'title': function () { resetUi(); go('title'); },
+    'export': function () {
+      if (!S.run) return;
+      S.exportText = JSON.stringify(runReport(), null, 2);
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(S.exportText).then(function () { toast('Run report copied'); }, function () {});
+        }
+      } catch (e) { /* the textarea fallback covers it */ }
+      go('export');
+    },
+    'exportback': function () { S.exportText = null; go(S.run.dead ? 'over' : S.run.won ? 'win' : 'hangar'); },
     'map': function () { S.sel = { crew: null, weapon: null }; go('map'); },
     'hangar': function () { go('hangar'); },
     'jump': function (v) {
