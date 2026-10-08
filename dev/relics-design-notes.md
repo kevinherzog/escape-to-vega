@@ -119,3 +119,31 @@ from the live file in **only** the lines marked `// NEW` (plus `panelRelics(s)` 
    - The repair tick is throttled by the existing `heatFactor` ramp, which is what keeps
      Weld Drone + engineer×4 from being literally unkillable past ~60 s. Don't remove that
      divisor from `tickSide`.
+
+---
+
+## Retune after measuring broken-build frequency
+
+The notes above describe the system as first built. Simulation then showed that a
+player who simply takes relics when offered ended up with at least one
+run-breaking combination online in **23.5%** of runs — far too often for an
+effect meant to feel like a story you tell afterwards. Three changes brought
+that to ~3% for relic-driven combos (~6.5% including the pure crew-draft path,
+measured generously), while leaving the payoffs themselves untouched:
+
+1. **Hive Resonator now requires 4 Insectoids** (was: effective with none).
+   As written it granted boarding damage from nothing and merely scaled with
+   Insectoids, so it was live in 13.5% of runs on its own. It now demands a
+   committed Insectoid crew, matching how Chorus Engine demands a committed
+   origin stack. `need: 4`, checked in `derive()`.
+2. **Tier-3 drop weights cut hard** — `RELIC_W` tier-3 column went
+   `2 / 15 / 30` to `1 / 2 / 4` by sector. Runs holding a tier-3 relic fell
+   from 43% to 8%.
+3. **Relic faucet narrowed** — elite loot 0.6 to 0.3, skirmish loot 0.22 to
+   0.07, trading-post stock 0.6 to 0.3. Guardians and the boss still guarantee
+   one, since that reads as a milestone. Average relics per run went 4.1 to 3.1,
+   so relics are still a normal part of a run; only the run-breaking ones are scarce.
+
+Win rate when a broken combo *is* online stayed at ~85-95%, and the baseline
+win rate did not move (66-71%), which was the goal: change how often the
+fireworks happen, not how big they are.

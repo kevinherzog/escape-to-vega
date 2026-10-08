@@ -599,7 +599,7 @@ var VEGA = (function () {
 
     /* ---- tier 3: build payoffs. these are meant to break the game ---- */
     hive:     { key: 'hive',     tier: 3, name: 'Hive Resonator',
-                desc: 'Boarding damage doubled, +1 more per 2 Insectoids aboard.', mul: 2, per: 2, base: 9 },
+                desc: 'With 4 Insectoids: boarding damage doubled, +1 more per 2 aboard.', mul: 2, per: 2, base: 9, need: 4 },
     chorus:   { key: 'chorus',   tier: 3, name: 'Chorus Engine',
                 desc: 'While 4 of one origin are aboard: +40 % weapon charge and +2 shield layers.', charge: 0.40, shield: 2 },
     prism:    { key: 'prism',    tier: 3, name: 'Prism Lens',
@@ -608,8 +608,10 @@ var VEGA = (function () {
 
   var RELIC_KEYS = ['lathe', 'ledger', 'welder', 'veil', 'blackbox', 'coil', 'spike', 'cascade', 'reactor', 'hive', 'chorus', 'prism'];
   var RELIC_PRICE = { 1: 12, 2: 20, 3: 32 };
-  /* drop weight per tier, by sector: commons early, legendaries late */
-  var RELIC_W = { 1: [70, 28, 2], 2: [45, 40, 15], 3: [25, 45, 30] };
+  /* Drop weight per tier, by sector: commons early, legendaries late. Tier 3 is
+     kept deliberately scarce — these are the run-breaking payoffs, and they are
+     meant to be a story you tell afterwards, not a thing you plan around. */
+  var RELIC_W = { 1: [79, 20, 1], 2: [62, 36, 2], 3: [50, 46, 4] };
 
   function hasRelic(s, k) { return !!(s.relics && s.relics.indexOf(k) >= 0); }
   function relicPrice(k) { return RELIC_PRICE[RELICS[k].tier]; }
@@ -759,7 +761,7 @@ function derive(s) {
 
     // Hive Resonator: doubles the boarding synergy, and gives a floor without it.
 
-    if (hasRelic(s, 'hive')) {
+    if (hasRelic(s, 'hive') && (cnt.bug || 0) >= RELICS.hive.need) {
 
       var extra = Math.floor((cnt.bug || 0) / RELICS.hive.per);
 
@@ -1245,9 +1247,11 @@ function makeLoot(s, type) {
     var t = randomType();
     var opts = [{ kind: 'weapon', k: R.pick(wPool) }, { kind: 'crew', role: t.role, origin: t.origin }];
     if (type !== 'fight') opts.push(R.chance(0.5) ? { kind: 'scrap', amount: 10 + sec * 3 } : { kind: 'hull', amount: 10 });
-    // Relic offers: guaranteed after a guardian (tier 2+), likely after an elite, rare after a skirmish.
+    // Relic offers: guaranteed after a guardian (tier 2+), sometimes after an
+    // elite, seldom after a skirmish. Kept tight on purpose — when relics came
+    // thick a quarter of all runs ended up broken, which spends the surprise.
     var wantRelic = type === 'guardian' || type === 'boss' ||
-      (type === 'elite' && R.chance(0.6)) || (type === 'fight' && R.chance(0.22));
+      (type === 'elite' && R.chance(0.3)) || (type === 'fight' && R.chance(0.07));
     if (wantRelic) {
       var rk = rollRelic(s, type === 'guardian' || type === 'boss' ? 2 : 1);
       if (rk) opts.push({ kind: 'relic', k: rk });
@@ -1284,7 +1288,7 @@ function makeStore(s) {
       offers: R.shuffle(pool).slice(0, n).map(function (k) { return { k: k, sold: false, price: WEAPONS[k].price }; }),
       relic: null
     };
-    if (R.chance(0.6)) {
+    if (R.chance(0.3)) {
       var rk = rollRelic(s, 1);
       if (rk) st.relic = { k: rk, sold: false, price: relicPrice(rk) };
     }
