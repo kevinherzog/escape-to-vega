@@ -915,17 +915,17 @@ function derive(s) {
     { key: 'chapel', name: 'Chapel', blurb: 'One gun. Six bunks. Win with the people, not the guns.',
       hull: 34, shieldLv: 1, engineLv: 1, weapons: ['burst'], slots: 1, maxSlots: 2,
       cap: 6, maxCap: 8, scrap: 8, crew: null, relic: null, noShields: false, crewPrice: 2, scrapMul: 1,
-      unlock: 'Field a crew of 6' },
+      unlock: 'Fill all 8 bunks in one run' },
 
     { key: 'needle', name: 'Needle', blurb: 'Fast and thin. Shields cannot be fitted at all.',
       hull: 18, shieldLv: 0, engineLv: 3, weapons: ['beam', 'laser'], slots: 3, maxSlots: 3,
       cap: 4, maxCap: 6, scrap: 10, crew: null, relic: 'gyro', noShields: true, crewPrice: 3, scrapMul: 1,
-      unlock: 'Win a fight without taking a hit' },
+      unlock: 'Beat an elite or guardian untouched' },
 
     { key: 'rustbucket', name: 'Rustbucket', blurb: 'Starts with nothing. Earns half again as much.',
       hull: 26, shieldLv: 1, engineLv: 1, weapons: ['mining'], slots: 3, maxSlots: 4,
       cap: 4, maxCap: 8, scrap: 0, crew: null, relic: 'ledger', noShields: false, crewPrice: 3, scrapMul: 1.5,
-      unlock: 'Bank 80 scrap in one run' }
+      unlock: 'Hold 80 scrap at once' }
   ];
   var LOADOUT_BY_KEY = {};
   LOADOUTS.forEach(function (l) { LOADOUT_BY_KEY[l.key] = l; });
@@ -1919,8 +1919,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   function checkShipUnlocks() {
     var s = S.run;
     if (!s) return;
-    if (s.crew.length >= 6) unlockShip('chapel');
-    if (s.stats.scrap >= 80) unlockShip('rustbucket');
+    // A full complement, not merely a large one.
+    if (s.crew.length >= 8) unlockShip('chapel');
+    // Scrap *held at once*. This read s.stats.scrap, which is everything earned
+    // across the whole run, so it fired on almost any finished run — a 210-scrap
+    // victory tripped an 80-scrap "bank it" condition without ever banking.
+    if (s.scrap >= 80) unlockShip('rustbucket');
   }
   function pickedDiff() { var d = get(DIFF_KEY); return Math.min(typeof d === 'number' ? d : 0, unlocked()); }
 
@@ -2362,7 +2366,10 @@ function viewHangar() {
   }
   function onCombatOver() {
     var c = S.combat;
-    if (c && c.winner === 'p' && c.p.hull >= c.p.maxHull) unlockShip('needle');
+    // Untouched against something that actually shoots back. Any first-sector
+    // skirmish could be walked through without a scratch.
+    if (c && c.winner === 'p' && c.p.hull >= c.p.maxHull &&
+        (c.type === 'elite' || c.type === 'guardian' || c.type === 'boss')) unlockShip('needle');
     if (!S.result) {
       S.result = L.endCombat(S.run, c);
       if (S.result.dead) { addRecord(false); clearRun(); }
@@ -2568,7 +2575,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v10',
+      cache: 'vega-v11',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
@@ -2614,7 +2621,7 @@ function viewStore() {
       drawCombat(S.combat);
       if (S.combat.over) onCombatOver(); else startLoop();
     } else loopId++;
-    if (S.screen === 'hangar' || S.screen === 'map') saveRun();
+    if (S.screen === 'hangar' || S.screen === 'map') { checkShipUnlocks(); saveRun(); }
   }
   function go(screen) {
     var changed = S.screen !== screen;
