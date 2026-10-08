@@ -20,7 +20,7 @@
 <style>
 :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 :root {
-  /* Portrait console: one column of instrument panels; in combat a vertical radar lane between enemy (top) and Albatross (bottom) */
+  /* Portrait console: one column of instrument panels; in combat a vertical radar lane between enemy (top) and your ship (bottom) */
   --bg: #d6ddd7;          /* console paint, green-grey */
   --panel: #edf1ec;       /* instrument panel */
   --panel-2: #e0e7e1;     /* recessed fields */
@@ -1228,7 +1228,7 @@ function startCombat(s, type, opts) {
     syncHull(s);
     var d = derive(s);
     var p = side({
-      name: 'Albatros', hull: s.hull, maxHull: maxHull(s),
+      name: loadoutOf(s).name, hull: s.hull, maxHull: maxHull(s),
       shieldMax: d.shieldMax, shieldRegen: d.shieldRegen, bonusShields: d.bonusShields,
       evasion: d.evasion, chargeMul: d.chargeMul, weapons: s.weapons, startCharge: d.startCharge,
       boarding: d.boarding, repairEvery: d.repairEvery,
@@ -1802,7 +1802,7 @@ function makeStore(s) {
         why: ctx.k ? 'Not enough scrap' : 'The vault is already stripped',
         run: function (s) {
           s.scrap -= 4; addRelic(s, ctx.k);
-          return { text: 'The seal gives way. ' + RELICS[ctx.k].name + ' is bolted to the Albatross. ' + RELICS[ctx.k].desc };
+          return { text: 'The seal gives way. ' + RELICS[ctx.k].name + ' is bolted to the ' + loadoutOf(s).name + '. ' + RELICS[ctx.k].desc };
         } },
       { label: 'Strip the hull instead', hint: '+12 scrap',
         run: function (s) { gainScrap(s, 12); return { text: 'You cut loose everything within reach. +12 scrap.' }; } },
@@ -1914,6 +1914,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     return true;
   }
   function pickedShip() { var k = get(SHIP_KEY); return shipUnlocked(k) ? k : 'albatross'; }
+  // The ship in play, or the one selected on the title screen when no run exists.
+  function shipName(run) {
+    if (run) return L.loadoutOf(run).name;
+    var k = pickedShip(), l = L.LOADOUTS.filter(function (x) { return x.key === k; })[0];
+    return l ? l.name : 'Albatross';
+  }
   // Checked after every node, so a ship can be earned mid-run rather than only
   // on the results screen.
   function checkShipUnlocks() {
@@ -1990,7 +1996,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     }
     return '<div class="screen route-screen" aria-hidden="true"><div class="route">' +
       '<span class="start">' + ic('i-hull') + '</span>' + segs + '<span class="vega">Vega</span></div>' +
-      '<div class="route-foot"><span>18 jumps</span><span>' + (run ? 'Albatross: Sector ' + run.sector + ', Jump ' + run.jump : 'Albatross ready to launch') + '</span></div></div>';
+      '<div class="route-foot"><span>18 jumps</span><span>' + (run ? shipName(run) + ': Sector ' + run.sector + ', Jump ' + run.jump : shipName(null) + ' ready to launch') + '</span></div></div>';
   }
   // Difficulty picker. Only rungs the player has earned are selectable; the
   // next one is shown locked so the ladder is visible from the start.
@@ -2026,7 +2032,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     return '<section class="title-hero">' +
         '<p class="eyebrow">Courier Mission · 3 Sectors</p>' +
         '<h1 class="display">Escape to Vega</h1>' +
-        '<p class="lead">You fly the Albatross with the last copy of the Star Archive on board. The Syndicate wants it back. Get it to Vega.</p>' +
+        '<p class="lead">You fly the ' + shipName(saved) + ' with the last copy of the Star Archive on board. The Syndicate wants it back. Get it to Vega.</p>' +
       '</section>' +
       routeScreen(saved) +
       panelShips() +
@@ -2052,7 +2058,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
       ['Repair', d.repairEvery ? '1<small> hull per ' + fmt(d.repairEvery) + ' s</small>' : '–'],
       ['Boarding Party', d.boarding ? d.boarding.dmg + '<small> damage per ' + d.boarding.every + ' s</small>' : '–']
     ];
-    return panel('Albatross', 'Shields Lv. ' + s.shieldLv + ' · Engine Lv. ' + s.engineLv,
+    return panel(shipName(s), 'Shields Lv. ' + s.shieldLv + ' · Engine Lv. ' + s.engineLv,
       '<dl class="stats">' + items.map(function (it) { return '<div class="stat"><dt>' + it[0] + '</dt><dd>' + it[1] + '</dd></div>'; }).join('') + '</dl>');
   }
   function panelWeapons(s, d) {
@@ -2082,7 +2088,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     var sel = s.crew.filter(function (m) { return m.id === S.sel.crew; })[0], bar = '';
     if (sel) {
       var v = C.SELL[sel.stars - 1];
-      bar = '<div class="sellbar"><span class="note">' + (s.crew.length <= 1 ? 'The Albatross won’t fly without crew.' : sel.name + ' disembarks and leaves ' + v + ' scrap behind.') + '</span>' +
+      bar = '<div class="sellbar"><span class="note">' + (s.crew.length <= 1 ? 'The ' + shipName(s) + ' won’t fly without crew.' : sel.name + ' disembarks and leaves ' + v + ' scrap behind.') + '</span>' +
         '<button class="btn btn-small" data-a="sellcrew" data-v="' + sel.id + '"' + (s.crew.length <= 1 ? ' disabled' : '') + '>Dismiss</button></div>';
     }
     return panel('Crew', s.crew.length + '/' + s.cap + ' bunks', '<div class="crew">' + cards + '</div>' + bar);
@@ -2376,7 +2382,7 @@ function viewHangar() {
       else if (S.result.boss) { addRecord(true); clearRun(); }
     }
     var r = S.result, html;
-    if (r.dead) html = '<b class="lose">Albatross destroyed</b><p>The Star Archive drifts in the void.</p><button class="btn btn-primary" data-a="cdone">Continue</button>';
+    if (r.dead) html = '<b class="lose">' + shipName(S.run) + ' destroyed</b><p>The Star Archive drifts in the void.</p><button class="btn btn-primary" data-a="cdone">Continue</button>';
     else if (r.fled) html = '<b class="win">Escaped</b><p>The jump succeeds. No loot this time.</p><button class="btn btn-primary" data-a="cdone">Continue</button>';
     else html = '<b class="win">' + (r.boss ? 'Leviathan destroyed' : 'Victory') + '</b><p>' + c.e.name + ' is taken out.</p><button class="btn btn-primary" data-a="cdone">' + (r.boss ? 'Onward to Vega' : 'Collect loot') + '</button>';
     drawCombat(c);
@@ -2522,14 +2528,14 @@ function viewStore() {
   }
   function viewOver() {
     var s = S.run;
-    return '<section class="end-hero"><p class="eyebrow">Flight Ended</p><h1 class="display lose">Albatross Lost</h1>' +
+    return '<section class="end-hero"><p class="eyebrow">Flight Ended</p><h1 class="display lose">' + shipName(s) + ' Lost</h1>' +
       '<p class="lead">You made it to Sector ' + s.sector + ', Jump ' + s.jump + '.</p></section>' + endStats(s) +
       '<div class="row-actions"><button class="btn btn-primary" data-a="new">New Flight</button><button class="btn" data-a="title">Title Screen</button></div>';
   }
   function viewWin() {
     var s = S.run;
     return '<section class="end-hero"><p class="eyebrow">Mission Accomplished</p><h1 class="display">Vega Reached</h1>' +
-      '<p class="lead">The Star Archive is safe. The Albatross lands with ' + s.hull + ' hull.</p></section>' + endStats(s) +
+      '<p class="lead">The Star Archive is safe. The ' + shipName(s) + ' lands with ' + s.hull + ' hull.</p></section>' + endStats(s) +
       '<div class="row-actions"><button class="btn btn-primary" data-a="new">New Flight</button><button class="btn" data-a="title">Title Screen</button></div>';
   }
 
@@ -2575,7 +2581,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v11',
+      cache: 'vega-v12',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
