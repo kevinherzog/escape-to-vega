@@ -686,9 +686,20 @@ var VEGA = (function () {
     return { id: s.nextId++, role: role, origin: origin, stars: stars || 1, name: name };
   }
 
+  // Synergies count distinct role+origin types, not bodies. A second
+  // Crystalline Pilot adds its own stats and can still merge, but it does not
+  // push either the Pilot or the Crystalline track. Without this, four of one
+  // type paid into two tracks at once and four crew bought you two tier-2
+  // synergies, which is the single cheapest broken build in the game.
   function counts(s) {
-    var c = {};
-    s.crew.forEach(function (m) { c[m.role] = (c[m.role] || 0) + 1; c[m.origin] = (c[m.origin] || 0) + 1; });
+    var c = {}, seen = {};
+    s.crew.forEach(function (m) {
+      var key = m.role + '/' + m.origin;
+      if (seen[key]) return;
+      seen[key] = true;
+      c[m.role] = (c[m.role] || 0) + 1;
+      c[m.origin] = (c[m.origin] || 0) + 1;
+    });
     return c;
   }
   function tierOf(cnt, key) { var n = cnt[key] || 0; return n >= 4 ? 2 : n >= 2 ? 1 : 0; }
@@ -1826,7 +1837,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
         '<li>' + ic('i-jump') + '<span>At each jump point you choose the next destination: combat, event, trading post, or space dock.</span></li>' +
         '<li>' + ic('i-fight') + '<span>Battles play out on their own. Each weapon fires as soon as it’s charged, and each shield layer absorbs one hit.</span></li>' +
         '<li>' + ic('i-human') + '<span>Between jumps you recruit crew. Three of a kind merge into one member with more stars.</span></li>' +
-        '<li>' + ic('i-spark') + '<span>Two or four of the same role or origin unlock synergies.</span></li>' +
+        '<li>' + ic('i-spark') + '<span>Two or four <em>different</em> crew sharing a role or origin unlock synergies. A type you already have adds nothing to the count — duplicates are only good for merging.</span></li>' +
         '<li>' + ic('i-coin') + '<span>Saved-up scrap earns interest: +1 per 10 scrap, up to +5 per jump.</span></li>' +
       '</ul>') +
       (rec.runs ? '<p class="record">' + rec.runs + (rec.runs === 1 ? ' flight' : ' flights') + ' so far · Vega reached: ' + rec.wins + '× · farthest flight: ' + (rec.best > 3 ? 'Vega' : 'Sector ' + rec.best) + '</p>' : '');
@@ -1890,7 +1901,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
         '<span class="cells" role="img" aria-label="' + n + ' on board">' + cells + '</span><span class="syneff">' + eff + '</span></div>';
       (n ? active : idle).push(row);
     });
-    return panel('Synergies', 'at 2 and 4',
+    return panel('Synergies', 'distinct types, at 2 and 4',
       (active.length ? '<div class="syn">' + active.join('') + '</div>' : '') +
       (idle.length ? '<details class="more"' + (S.synOpen ? ' open' : '') + '><summary>' + idle.length + ' more synergies</summary><div class="syn">' + idle.join('') + '</div></details>' : ''));
   }
@@ -1915,12 +1926,18 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
       if (merge) badges += '<span class="badge hot">Upgrade ★★</span>';
       else if (have === 1) badges += '<span class="badge hot">2 of 3</span>';
       if (!merge) {
-        var rn = (cnt[o.role] || 0) + 1, on = (cnt[o.origin] || 0) + 1;
-        var rHit = rn === 2 || rn === 4, oHit = on === 2 || on === 4;
-        if (rHit && oHit) badges += '<span class="badge double">⚡ Double Synergy</span>';
+        // A type already aboard adds nothing to either track, so promising a
+        // synergy here would be a lie. Say what it is instead.
+        var dupe = L.copies(s, o.role, o.origin, 1) > 0 || L.copies(s, o.role, o.origin, 2) > 0 || L.copies(s, o.role, o.origin, 3) > 0;
+        if (dupe) badges += '<span class="badge">Already aboard · merges only</span>';
         else {
-          if (rHit) badges += '<span class="badge syn">' + L.ROLES[o.role].plural + ' ' + rn + '</span>';
-          if (oHit) badges += '<span class="badge syn">' + L.ORIGINS[o.origin].plural + ' ' + on + '</span>';
+          var rn = (cnt[o.role] || 0) + 1, on = (cnt[o.origin] || 0) + 1;
+          var rHit = rn === 2 || rn === 4, oHit = on === 2 || on === 4;
+          if (rHit && oHit) badges += '<span class="badge double">⚡ Double Synergy</span>';
+          else {
+            if (rHit) badges += '<span class="badge syn">' + L.ROLES[o.role].plural + ' ' + rn + '</span>';
+            if (oHit) badges += '<span class="badge syn">' + L.ORIGINS[o.origin].plural + ' ' + on + '</span>';
+          }
         }
       }
       var can = L.canRecruit(s, o.role, o.origin), afford = s.scrap >= C.CREW_PRICE;
@@ -2310,7 +2327,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v4',
+      cache: 'vega-v5',
       when: new Date().toISOString(),
       seed: s.seed,
       difficulty: (s.diff || 0) + ' ' + L.diffOf(s).name,
