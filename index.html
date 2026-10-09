@@ -218,6 +218,11 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); pa
 details.more[open] summary { margin-bottom: 6px; }
 
 /* ---------- Run report ---------- */
+.helpbody p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
+.helpbody p:last-child { margin-bottom: 0; }
+.helpbody b { font-weight: 700; }
+details.more .helpbody { padding: 2px 8px 8px; }
+
 .exportbox { width: 100%; font: 500 11px/1.4 var(--font-data); background: var(--panel-2); color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--r); padding: 8px; resize: vertical; -webkit-user-select: text; user-select: text; }
 
@@ -2091,6 +2096,42 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     var curShip = L.LOADOUTS.filter(function (l) { return l.key === cur; })[0];
     return panel('Ship', curShip ? curShip.name : '', '<div class="diffs">' + rows + '</div>');
   }
+  // A reference the player can reach but is never taxed by. Most of this is
+  // mechanics the game applies invisibly — above all that a shield layer stops
+  // one whole shot whatever its size, which is the rule that decides every
+  // weapon choice and was nowhere on screen.
+  function helpSection(title, open, body) {
+    return '<details class="more"' + (open ? ' open' : '') + '><summary>' + title + '</summary>' +
+      '<div class="helpbody">' + body + '</div></details>';
+  }
+  function viewHelp() {
+    var back = S.run ? 'hangar' : 'title';
+    return (S.run ? topBar() : '') +
+      panel('How It Works', 'reference',
+        helpSection('A fight, step by step', true,
+          '<p>Nobody steers. Every weapon fires the moment it finishes charging, and keeps firing until one ship is gone.</p>' +
+          '<p><b>Each shield layer stops one incoming shot, whatever that shot was going to do.</b> A 5-damage Railgun slug and a 1-damage pellet are both swallowed by a single layer. This is the most important rule in the game: against shields, <em>many small shots beat one big one</em>.</p>' +
+          '<p>Shields recharge on a timer. Past about half a minute of shooting the generators overheat and recharge ever more slowly, so long fights favour whoever is still landing hits.</p>' +
+          '<p>Evasion is a flat chance that an incoming shot misses entirely. A fight that drags on far too long starts tearing both ships apart.</p>') +
+        helpSection('The four kinds of weapon', false,
+          '<p><b>Projectile</b> — laser, flak, railgun and the rest. Can be evaded, and one shield layer stops one shot.</p>' +
+          '<p><b>Missile</b> — ignores shields completely, but can still be evaded.</p>' +
+          '<p><b>Beam</b> — never misses, but shields subtract from its damage.</p>' +
+          '<p><b>Ion</b> — deals no damage. Strips a shield layer and stalls recharging.</p>' +
+          '<p>So: against a shielded enemy, bring missiles, ion, or a weapon that fires many shots. Against a slippery one, bring a beam.</p>') +
+        helpSection('Crew, synergies and stars', false,
+          '<p>A crew member has a <b>role</b> and an <b>origin</b>. The role is what they personally do, and it is written on their card: gunners charge weapons faster, pilots add evasion, technicians charge shields faster, engineers repair the hull mid-fight.</p>' +
+          '<p>Origin does nothing on its own. It feeds the origin synergies.</p>' +
+          '<p><b>Synergies need 2 or 4 <em>different</em> crew</b> sharing a role or an origin. A type already aboard adds nothing to the count — a second Crystalline Pilot is only ever merge material.</p>' +
+          '<p>Three of a kind merge into a two-star member; two two-stars merge again into three stars.</p>') +
+        helpSection('Scrap', false,
+          '<p>Scrap buys crew, weapons, relics, repairs and upgrades. Banked scrap earns interest, +1 per 10 held, up to +5 a jump — but sitting on it while under-equipped is a quick way to die.</p>' +
+          '<p>Rerolling the recruit list costs more each time within a single stop, and resets at the next jump.</p>' +
+          '<p>From sector 2 a relic broker appears, selling relics at a steep markup. It is the one thing worth saving for.</p>') +
+        helpSection('Relics', false,
+          '<p>Relics are permanent for the rest of the run and stack without limit. Most are small. A few, lined up with the right crew, are not.</p>')) +
+      footBar('', '<button class="btn btn-primary" data-a="helpback" data-v="' + back + '">Back ' + ic('i-go') + '</button>');
+  }
   function viewTitle() {
     var saved = savedRun(), rec = record();
     var actions = saved
@@ -2111,7 +2152,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
         '<li>' + ic('i-human') + '<span>Between jumps you recruit crew. Three of a kind merge into a two-star member, and two of those merge again into three stars.</span></li>' +
         '<li>' + ic('i-spark') + '<span>Two or four <em>different</em> crew sharing a role or origin unlock synergies. A type you already have adds nothing to the count — duplicates are only good for merging.</span></li>' +
         '<li>' + ic('i-coin') + '<span>Saved-up scrap earns interest: +1 per 10 scrap, up to +5 per jump.</span></li>' +
-      '</ul>') +
+      '</ul>' +
+        '<button class="btn" data-a="help">Full reference ' + ic('i-event') + '</button>') +
       (rec.runs ? '<p class="record">' + rec.runs + (rec.runs === 1 ? ' flight' : ' flights') + ' so far · Vega reached: ' + rec.wins + '× · farthest flight: ' + (rec.best > 3 ? 'Vega' : 'Sector ' + rec.best) + '</p>' : '');
   }
 
@@ -2266,7 +2308,8 @@ function viewHangar() {
     return topBar() + panelShip(s, d) + panelWeapons(s, d) + panelCrew(s) + panelSynergies(s) +
       panelRelics(s) + panelRecruit(s) + panelUpgrades(s) +
       footBar(gain ? 'Interest on next jump: <b class="num">+' + gain + '</b>' : 'Interest kicks in at 10 scrap.',
-        '<button class="btn btn-small" data-a="export" aria-label="Copy run report">' + ic('i-event') + '</button>' +
+        '<button class="btn btn-small" data-a="help" aria-label="How it works">?</button>' +
+        '<button class="btn btn-small" data-a="export" aria-label="Copy run report">' + ic('i-scrap') + '</button>' +
         '<button class="btn btn-primary" data-a="map">Star Map ' + ic('i-go') + '</button>');
   }
 
@@ -2655,7 +2698,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v18',
+      cache: 'vega-v19',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
@@ -2692,9 +2735,10 @@ function viewStore() {
     while (box.children.length > 3) box.removeChild(box.firstChild);
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2700);
   }
-  var VIEWS = { 'export': viewExport, broker: viewBroker, title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
+  var VIEWS = { 'export': viewExport, help: viewHelp, broker: viewBroker, title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
   function render() {
-    if (S.screen !== 'title' && !S.run) S.screen = 'title';
+    // the reference is readable before a run exists; everything else needs one
+    if (S.screen !== 'title' && S.screen !== 'help' && !S.run) S.screen = 'title';
     document.getElementById('app').innerHTML = VIEWS[S.screen]();
     if (S.screen === 'combat') {
       bindCombat();
@@ -2726,6 +2770,8 @@ function viewStore() {
       } catch (e) { /* the textarea fallback covers it */ }
       go('export');
     },
+    'help': function () { go('help'); },
+    'helpback': function (v) { go(v === 'hangar' && S.run ? 'hangar' : 'title'); },
     'exportback': function () { S.exportText = null; go(S.run.dead ? 'over' : S.run.won ? 'win' : 'hangar'); },
     'map': function () { S.sel = { crew: null, weapon: null }; go('map'); },
     'hangar': function () { go('hangar'); },
