@@ -850,12 +850,19 @@ function derive(s) {
     // Dreadnought Core quietly fit shields to a ship whose whole point is that it
     // cannot have them. Crew-projected extra shields are a separate pool and stay.
     if (loadoutOf(s).noShields) shieldMax = 0;
+    // sector weather, applied last so it reads as conditions on top of a build
+    var SM = sectorMod(s);
+    chargeMul += SM.chargeMul || 0;
+    evasion += modEvasion(s);
+    shieldSpeed += SM.shieldSpeed || 0;
+    if (shieldSpeed < 0.3) shieldSpeed = 0.3;
+    if (chargeMul < 0.3) chargeMul = 0.3;
 
     return {
 
       chargeMul: chargeMul,
 
-      evasion: Math.min(evasion, C.EVASION_CAP),
+      evasion: Math.max(0, Math.min(evasion, C.EVASION_CAP)),
 
       shieldMax: shieldMax,
 
@@ -901,6 +908,35 @@ function derive(s) {
     { lv: 4, name: 'Nightfall', blurb: 'Everything, all at once.',                ehull: 1.30, eshield: 2, ewcBig: 1, elite: 18, hull: -6, scrap: -6, repair: 3 }
   ];
   function diffOf(s) { return DIFFS[(s && s.diff) || 0] || DIFFS[0]; }
+
+  // ---------- Sector modifiers ----------
+  // One rolls at the start of every sector and holds for every jump in it,
+  // including that sector's guardian. Cheap texture: sector 2 should read as a
+  // different place from sector 1 rather than the same place with bigger
+  // numbers. Four of the seven are symmetric — they hit the enemy identically —
+  // so that this can never become a second source of the rare broken run that
+  // relic stacking already owns.
+  var SECTOR_MODS = {
+    clear:    { name: 'Clear Space',   desc: 'Nothing unusual out here.' },
+    ionstorm: { name: 'Ion Storm',     desc: 'Shields charge 20% slower, for both sides, all sector.', shieldSpeed: -0.20 },
+    flare:    { name: 'Reactor Flare', desc: 'Weapons charge 15% faster, for both sides, all sector.', chargeMul: 0.15 },
+    dust:     { name: 'Dust Nebula',   desc: 'Evasion drops for both sides, all sector.', evasion: -10 },
+    richvein: { name: 'Rich Vein',     desc: 'Combat scrap rewards +25% this sector.', scrapMul: 0.25 },
+    patrol:   { name: 'Heavy Patrol',  desc: 'Elites turn up far more often this sector.', eliteMul: 2.5 },
+    quiet:    { name: 'Quiet Sector',  desc: 'No elites this sector. Combat scrap -15%.', eliteMul: 0, scrapMul: -0.15 }
+  };
+  var SECTOR_MOD_KEYS = Object.keys(SECTOR_MODS);
+  function rollSectorMod() { return R.pick(SECTOR_MOD_KEYS); }
+  function sectorMod(s) { return SECTOR_MODS[s && s.sectorMod] || SECTOR_MODS.clear; }
+  // Evasion is the one modifier that is symmetric in formula but not in outcome:
+  // subtracting a flat amount hurts whichever side has less to begin with, and
+  // early on that is reliably the player. So it ramps in by sector exactly as the
+  // difficulty penalties do, biting least in sector 1.
+  function modEvasion(s) {
+    var sec = (s && s.sector) || 1;
+    var ramp = sec === 1 ? 0.4 : sec === 2 ? 0.75 : 1;
+    return (sectorMod(s).evasion || 0) * ramp;
+  }
   function repairPrice(s) { return C.REPAIR_PRICE + diffOf(s).repair; }
 
   // ---------- Ships ----------
@@ -959,6 +995,7 @@ function newRun(diff, seedVal, shipKey) {
       scrap: Math.max(0, SHIP.scrap + D.scrap),
       relics: SHIP.relic ? [SHIP.relic] : [],
       rerolls: 0,
+      sectorMod: rollSectorMod(),
       shop: [], beacons: [],
       node: null,
       usedEvents: [],
@@ -1130,6 +1167,8 @@ function newRun(diff, seedVal, shipKey) {
     if (s.jump >= C.SECTOR_LEN) return [{ type: s.sector >= C.SECTORS ? 'boss' : 'guardian' }];
     var w = { fight: 40, event: 28, shop: 12, dock: 8, elite: (s.sector > 1 || s.jump >= 2) ? 12 + diffOf(s).elite : 0,
               broker: s.sector >= 2 ? 10 : 0 };
+    var SMb = sectorMod(s);
+    if (w.elite && SMb.eliteMul != null) w.elite = Math.round(w.elite * SMb.eliteMul);
     if (s.jump === 0) w.dock = 0;
     var n = R.chance(0.55) ? 3 : 2;
     var out = [];
@@ -1159,7 +1198,7 @@ function newRun(diff, seedVal, shipKey) {
   }
   function afterNode(s) {
     var sectorUp = false;
-    if (s.node && s.node.type === 'guardian') { s.sector++; s.jump = 0; sectorUp = true; }
+    if (s.node && s.node.type === 'guardian') { s.sector++; s.jump = 0; sectorUp = true; s.sectorMod = rollSectorMod(); }
     s.node = null;
     s.beacons = genBeacons(s);
     return sectorUp;
@@ -1216,7 +1255,13 @@ function newRun(diff, seedVal, shipKey) {
     var ramp = sec === 1 ? 0.4 : sec === 2 ? 0.75 : 1;
     hull = Math.round(hull * (1 + (D.ehull - 1) * ramp));
     shields += sec === 1 ? 0 : Math.round(D.eshield * ramp);
-    return { name: name, hull: hull, maxHull: hull, shieldMax: shields, shieldRegen: C.SHIELD_REGEN, evasion: evasion, weapons: weapons, chargeMul: chargeMul, boarding: boarding, repairEvery: repairEvery, bonusShields: 0, startCharge: 0, veteran: veteran, enrage: enrage };
+    // the same weather hits the enemy; it recolours an encounter, it does not tilt it
+    var SMe = sectorMod(s);
+    chargeMul += SMe.chargeMul || 0;
+    evasion = Math.max(0, evasion + modEvasion(s));
+    var eShieldSpeed = 1 + (SMe.shieldSpeed || 0);
+    if (eShieldSpeed < 0.3) eShieldSpeed = 0.3;
+    return { name: name, hull: hull, maxHull: hull, shieldMax: shields, shieldRegen: C.SHIELD_REGEN / eShieldSpeed, evasion: evasion, weapons: weapons, chargeMul: chargeMul, boarding: boarding, repairEvery: repairEvery, bonusShields: 0, startCharge: 0, veteran: veteran, enrage: enrage };
   }
 
   // ---------- Combat ----------
@@ -1397,6 +1442,7 @@ function endCombat(s, c) {
       if (hasRelic(s, 'lathe') && c.dealt) scrap += Math.floor(c.dealt / RELICS.lathe.per);               // Salvage Lathe
       if (hasRelic(s, 'ledger')) scrap += Math.min(RELICS.ledger.cap, Math.floor(s.scrap * RELICS.ledger.rate)); // Syndicate Ledger
     }
+    if (c.type !== 'boss' && sectorMod(s).scrapMul) scrap = Math.round(scrap * (1 + sectorMod(s).scrapMul));
     scrap = Math.round(scrap * loadoutOf(s).scrapMul);
     s.scrap += scrap; s.stats.scrap += scrap;
     var before = s.hull;
@@ -1868,6 +1914,7 @@ function makeStore(s) {
     makeStore: makeStore, makeBroker: makeBroker, brokerBuy: brokerBuy, brokerPrice: brokerPrice, storeBuy: storeBuy, repair: repair, buySlot: buySlot,
     DIFFS: DIFFS, diffOf: diffOf, repairPrice: repairPrice,
     LOADOUTS: LOADOUTS, loadoutOf: loadoutOf, crewPrice: crewPrice,
+    SECTOR_MODS: SECTOR_MODS, sectorMod: sectorMod, modEvasion: modEvasion,
     RELICS: RELICS, RELIC_KEYS: RELIC_KEYS,
     hasRelic: hasRelic, addRelic: addRelic, rollRelic: rollRelic,
     relicPrice: relicPrice, relicsOwned: relicsOwned, storeBuyRelic: storeBuyRelic,
@@ -1987,7 +2034,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
       pips += '<i class="pip' + (i === C.SECTOR_LEN + 1 ? ' gate' : '') + (i <= s.jump ? ' done' : '') + (i === s.jump + 1 && S.screen !== 'combat' && !s.node ? ' now' : '') + '"></i>';
     }
     return '<header class="top">' +
-      '<div class="top-route">' + L.loadoutOf(s).name + ' · Sector ' + s.sector + ' of 3' + (s.diff ? ' · ' + L.diffOf(s).name : '') + ' <span class="pips" role="img" aria-label="' + s.jump + ' of ' + (C.SECTOR_LEN + 1) + ' jumps completed">' + pips + '</span></div>' +
+      '<div class="top-route">' + L.loadoutOf(s).name + ' · Sector ' + s.sector + ' of 3' + (s.diff ? ' · ' + L.diffOf(s).name : '') +
+      (L.sectorMod(s).name === 'Clear Space' ? '' : ' · ' + L.sectorMod(s).name) + ' <span class="pips" role="img" aria-label="' + s.jump + ' of ' + (C.SECTOR_LEN + 1) + ' jumps completed">' + pips + '</span></div>' +
       '<div class="scrap">' + ic('i-scrap') + '<span class="num">' + s.scrap + '</span><span class="sr"> Scrap</span></div>' +
       hullBar(s.hull, L.maxHull(s)) +
       '</header>';
@@ -2230,7 +2278,9 @@ function viewHangar() {
       ? (s.sector >= C.SECTORS ? 'Vega lies directly beyond the flagship. There’s no avoiding it, and no fleeing either.' : 'A guardian blocks the jump gate into Sector ' + (s.sector + 1) + '. Fleeing isn’t possible here.')
       : 'The jump data shows what awaits you at the next point.';
     return topBar() +
-      panel(last ? 'Jump Gate' : 'Jump Destinations', 'Jump ' + (s.jump + 1) + ' of ' + (C.SECTOR_LEN + 1), '<p class="note pad">' + text + '</p>') +
+      panel(last ? 'Jump Gate' : 'Jump Destinations', 'Jump ' + (s.jump + 1) + ' of ' + (C.SECTOR_LEN + 1),
+        (L.sectorMod(s).name === 'Clear Space' ? '' : '<p class="note pad"><b>' + L.sectorMod(s).name + '.</b> ' + L.sectorMod(s).desc + '</p>') +
+        '<p class="note pad">' + text + '</p>') +
       '<div class="choices">' + list + '</div>' +
       footBar(L.interest(s) ? 'Interest on jump: <b class="num">+' + L.interest(s) + '</b>' : 'Interest kicks in at 10 scrap.', '<button class="btn" data-a="hangar">Hangar</button>');
   }
@@ -2601,7 +2651,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v16',
+      cache: 'vega-v17',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
