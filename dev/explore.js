@@ -162,7 +162,9 @@ var t0 = Date.now();
 for (var i = 0; i < RUNS; i++) {
   var d = DIFF_ARG === 'all' ? Math.floor(Math.random() * L.DIFFS.length) : parseInt(DIFF_ARG, 10);
   var sh = SHIP_ARG === 'all' ? pick(SHIP_KEYS) : SHIP_ARG;
-  results.push(play(900000 + i, d, sh));
+  var row = play(900000 + i, d, sh);
+  row.__i = i;
+  results.push(row);
   if ((i + 1) % 500 === 0) process.stderr.write('  ...' + (i + 1) + '/' + RUNS + '\n');
 }
 var secs = ((Date.now() - t0) / 1000).toFixed(0);
@@ -187,6 +189,46 @@ console.log('(lifts below are against runs that reached the same checkpoint with
 
 // A feature is scored by comparing runs that HAD it at the end of sector 1
 // against runs that did not, among runs that all reached sector 1's end.
+//
+// STRATIFIED, and it has to be. Pooling every ship together produced a textbook
+// Simpson's paradox: the gunner synergy measured POSITIVE on all five ships
+// individually and NEGATIVE (-1.26) pooled, because two ships start with gunners
+// aboard and those same two ships are independently the weakest. Pooling
+// therefore compared "has gunners" against "is flying a different ship". Lifts
+// below are computed within each ship/difficulty cell and then averaged weighted
+// by cell size, so a feature is only ever compared against runs that started the
+// same way.
+function cellOf(r) { return r.ship + '|' + r.diff; }
+function stratifiedLift(withF, metric) {
+  var byCell = {}, i;
+  reachedS2.forEach(function (r) {
+    var c = cellOf(r);
+    if (!byCell[c]) byCell[c] = { all: [], has: [] };
+    byCell[c].all.push(r);
+  });
+  withF.forEach(function (r) { byCell[cellOf(r)].has.push(r); });
+  var num = 0, den = 0;
+  Object.keys(byCell).forEach(function (c) {
+    var cell = byCell[c];
+    var has = cell.has;
+    var hasSet = {};
+    has.forEach(function (r) { hasSet[r.__i] = 1; });
+    var without = cell.all.filter(function (r) { return !hasSet[r.__i]; });
+    // Thin cells say nothing, and lopsided ones are worse than nothing: when a
+    // ship starts with a synergy already active, the handful of runs lacking it
+    // are runs that somehow lost crew, which is not a fair comparison group.
+    if (has.length < 10 || without.length < 10) return;
+    var prev = has.length / cell.all.length;
+    if (prev < 0.1 || prev > 0.9) return;
+    var w = has.length;
+    num += (metric(has) - metric(without)) * w;
+    den += w;
+  });
+  // null, not zero: no cell was thick or balanced enough to compare. Rare
+  // features (a tier-2 synergy under random play) land here, and printing 0.00
+  // for them would read as "measured, no effect" rather than "not measured".
+  return den ? num / den : null;
+}
 function compare(title, featuresOf) {
   var buckets = {};
   reachedS2.forEach(function (r) {
@@ -195,21 +237,23 @@ function compare(title, featuresOf) {
       buckets[f].push(r);
     });
   });
-  var inSet = new Set();
   var rows = Object.keys(buckets).map(function (f) {
     var withF = buckets[f];
-    inSet.clear();
-    withF.forEach(function (r) { inSet.add(r); });
-    var without = reachedS2.filter(function (r) { return !inSet.has(r); });
-    return { f: f, n: withF.length, depth: depth(withF), dLift: depth(withF) - depth(without),
-             s3: s3(withF), s3Lift: s3(withF) - s3(without), win: rate(withF) };
+    return { f: f, n: withF.length, depth: depth(withF),
+             dLift: stratifiedLift(withF, depth),
+             s3: s3(withF), s3Lift: stratifiedLift(withF, s3), win: rate(withF) };
   }).filter(function (row) { return row.n >= 40; })
-    .sort(function (a, b) { return b.dLift - a.dLift; });
+    .sort(function (a, b) {
+      if (a.dLift == null && b.dLift == null) return 0;
+      if (a.dLift == null) return 1;            // unmeasurable rows sink
+      if (b.dLift == null) return -1;
+      return b.dLift - a.dLift;
+    });
   if (!rows.length) return;
   console.log('--- ' + title + ' (held at end of sector 1) ---');
-  console.log('    ' + pad('', 26) + pad('n', 7) + pad('depth', 8) + pad('+/-', 8) + pad('reach s3', 10) + pad('+/-', 8) + 'win%');
+  console.log('    ' + pad('', 26) + pad('n', 7) + pad('depth', 8) + pad('+/-*', 8) + pad('reach s3', 10) + pad('+/-*', 8) + 'win%');
   rows.forEach(function (r) {
-    var sign = function (x, d) { return (x >= 0 ? '+' : '') + x.toFixed(d); };
+    var sign = function (x, d) { return x == null ? 'n/a' : (x >= 0 ? '+' : '') + x.toFixed(d); };
     console.log('    ' + pad(r.f, 26) + pad(r.n, 7) + pad(r.depth.toFixed(2), 8) + pad(sign(r.dLift, 2), 8) +
       pad(r.s3.toFixed(1) + '%', 10) + pad(sign(r.s3Lift, 1), 8) + r.win.toFixed(1));
   });
@@ -250,6 +294,10 @@ if (DIFF_ARG === 'all') {
   });
   console.log('');
 }
+console.log('* lift is stratified by ship and difficulty, then size-weighted — a feature is');
+console.log('  compared only against runs that started the same way. Pooling naively here');
+console.log('  inverts signs (see the comment above compare()).');
+console.log('');
 console.log('Caveat: these are correlations from random play, not advice. A feature');
 console.log('measured here is one a random walk happened to hold early; it may be');
 console.log('cheap rather than strong. Treat large n and large lift together.');
