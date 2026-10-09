@@ -915,22 +915,22 @@ function derive(s) {
 
     { key: 'hammerhead', name: 'Hammerhead', blurb: 'Four guns, two bunks, and no room to grow a crew.',
       hull: 32, shieldLv: 1, engineLv: 1, weapons: ['heavy', 'burst', 'laser'], slots: 4, maxSlots: 4,
-      cap: 2, maxCap: 3, scrap: 6, crew: null, relic: null, noShields: false, crewPrice: 3, scrapMul: 1,
+      cap: 2, maxCap: 3, scrap: 6, crew: [['gunner', 'human'], ['gunner', 'rock']], relic: null, noShields: false, crewPrice: 3, scrapMul: 1,
       unlock: 'Reach Vega with any ship' },
 
-    { key: 'chapel', name: 'Chapel', blurb: 'One gun. Six bunks. Win with the people, not the guns.',
-      hull: 34, shieldLv: 1, engineLv: 1, weapons: ['burst'], slots: 1, maxSlots: 2,
-      cap: 6, maxCap: 8, scrap: 8, crew: null, relic: null, noShields: false, crewPrice: 2, scrapMul: 1,
+    { key: 'chapel', name: 'Chapel', blurb: 'Few guns, many bunks, cheap hires. Win with the crew.',
+      hull: 34, shieldLv: 1, engineLv: 1, weapons: ['burst', 'laser'], slots: 2, maxSlots: 3,
+      cap: 6, maxCap: 8, scrap: 8, crew: [['tech', 'bug'], ['engineer', 'bug']], relic: null, noShields: false, crewPrice: 2, scrapMul: 1,
       unlock: 'Fill all 8 bunks in one run' },
 
-    { key: 'needle', name: 'Needle', blurb: 'Fast and thin. Shields cannot be fitted at all.',
-      hull: 18, shieldLv: 0, engineLv: 3, weapons: ['beam', 'laser'], slots: 3, maxSlots: 3,
+    { key: 'needle', name: 'Needle', blurb: 'Thin and quick. Shields cannot be fitted at all.',
+      hull: 24, shieldLv: 0, engineLv: 3, weapons: ['beam', 'laser'], slots: 3, maxSlots: 3,
       cap: 4, maxCap: 6, scrap: 10, crew: null, relic: 'gyro', noShields: true, crewPrice: 3, scrapMul: 1,
       unlock: 'Beat an elite or guardian untouched' },
 
     { key: 'rustbucket', name: 'Rustbucket', blurb: 'Starts with nothing. Earns half again as much.',
       hull: 26, shieldLv: 1, engineLv: 1, weapons: ['mining'], slots: 3, maxSlots: 4,
-      cap: 4, maxCap: 8, scrap: 0, crew: null, relic: 'ledger', noShields: false, crewPrice: 3, scrapMul: 1.5,
+      cap: 4, maxCap: 8, scrap: 0, crew: [['engineer', 'human'], ['gunner', 'human']], relic: 'ledger', noShields: false, crewPrice: 3, scrapMul: 1.5,
       unlock: 'Hold 80 scrap at once' }
   ];
   var LOADOUT_BY_KEY = {};
@@ -2601,7 +2601,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v14',
+      cache: 'vega-v15',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
