@@ -1604,7 +1604,8 @@ function makeStore(s) {
     { id: 'pod', title: 'Escape Pod', text: 'An escape pod drifts in space. Someone is knocking from inside.',
       setup: function () { return { t: randomType() }; },
       choices: function (s, ctx) { return [
-        { label: 'Take them aboard', hint: typeLabel(ctx.t), run: function (s) {
+        { label: 'Take them aboard', hint: 'Usually survivors. Not always.', run: function (s) {
+          if (R.chance(0.25)) return { text: 'The hatch opens onto a boarding charge and three very awake pirates.', combat: { type: 'fight', bonusScrap: 4 } };
           if (canRecruit(s, ctx.t.role, ctx.t.origin)) return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) };
           gainScrap(s, 4); return { text: 'No room on board. The survivors give you 4 scrap and wait for the next freighter.' };
         } },
@@ -1682,7 +1683,8 @@ function makeStore(s) {
       ]; } },
     { id: 'drone', title: 'Repair Drone', text: 'An ownerless repair drone offers its services.',
       choices: function () { return [
-        { label: 'Let it dock', run: function (s) { var h = heal(s, 8); return { text: h > 0 ? 'The drone patches your hull. +' + h + ' hull.' : 'The drone finds nothing to repair and polishes the windshield.' }; } },
+        { label: 'Let it dock', cost: 4, req: function (s) { return s.scrap >= 4; }, why: 'It does not work for nothing',
+          run: function (s) { s.scrap -= 4; var h = heal(s, 8); return { text: h > 0 ? 'It takes its fee in parts and patches the hull. +' + h + ' hull.' : 'It finds nothing to repair, keeps the fee, and polishes the windshield.' }; } },
         { label: 'Decline', run: function () { return { text: 'The drone buzzes off.' }; } }
       ]; } },
     { id: 'hive', title: 'Insectoid Nest', text: 'An insectoid nest hums on an asteroid.',
@@ -1712,8 +1714,7 @@ function makeStore(s) {
     choices: function (s, ctx) { return [
       { label: 'Let them stay', hint: typeLabel(ctx.t), req: function (s) { return canRecruit(s, ctx.t.role, ctx.t.origin); }, why: 'No bunk free',
         run: function (s) { return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) }; } },
-      { label: 'Report them for the reward', run: function (s) { var g = R.int(7, 12); gainScrap(s, g); return { text: 'The bounty clerk does not ask questions. +' + g + ' scrap.' }; } },
-      { label: 'Pretend you saw nothing', run: function () { return { text: 'You log the compartment as empty, same as the manifest says.' }; } }
+      { label: 'Report them for the reward', run: function (s) { var g = R.int(7, 12); gainScrap(s, g); return { text: 'The bounty clerk does not ask questions. +' + g + ' scrap.' }; } }
     ]; } },
 
   { id: 'bounty', title: 'Bounty Board', text: 'A derelict relay still broadcasts an old bounty list. One hull signature on your scope matches a name on it.',
@@ -1726,7 +1727,10 @@ function makeStore(s) {
     choices: function () { return [
       { label: 'Storm it', hint: 'Fight, +5 scrap if you win', run: function () { return { text: 'You match velocity and breach.', combat: { type: 'fight', bonusScrap: 5 } }; } },
       { label: 'Sell the hijack code to a rival crew', run: function (s) { var g = R.int(6, 10); gainScrap(s, g); return { text: 'Not your problem anymore. +' + g + ' scrap.' }; } },
-      { label: 'Warn it off and move on', run: function () { return { text: 'The freighter changes course, slowly.' }; } }
+      { label: 'Warn it off and move on', hint: 'They patch you up in thanks', run: function (s) {
+          var h = heal(s, 6);
+          return { text: h > 0 ? 'The freighter changes course, then pulls alongside and welds your plating while it can. +' + h + ' hull.' : 'The freighter changes course, slowly, and thanks you on an open channel.' };
+        } }
     ]; } },
 
   { id: 'debt', title: 'Debt Collectors', text: 'A collection drone pings your hull with a lien notice. Someone sold your flight plan to a creditor.',
@@ -1808,10 +1812,11 @@ function makeStore(s) {
   { id: 'choir', title: 'Spark Choir', text: 'A cluster of drifting energy motes pulses in slow rhythm with your reactor hum.',
     setup: function () { return { role: R.pick(ROLE_KEYS) }; },
     choices: function (s, ctx) { return [
-      { label: 'Reach out', hint: 'Joins for free if a spark is already aboard', run: function (s) {
-          if ((counts(s).spark || 0) >= 1 && canRecruit(s, ctx.role, 'spark')) return { text: recruitText(addCrew(s, ctx.role, 'spark')) };
+      { label: 'Reach out', hint: 'Costs hull. One joins free if a spark is aboard', run: function (s) {
+          var d = hurt(s, R.int(3, 5));
+          if ((counts(s).spark || 0) >= 1 && canRecruit(s, ctx.role, 'spark')) return { text: recruitText(addCrew(s, ctx.role, 'spark')) + ' The reactor pays for the introduction. -' + d + ' hull.' };
           var g = R.int(5, 9); gainScrap(s, g);
-          return { text: 'The motes dim and scatter, leaving charged residue behind. +' + g + ' scrap.' };
+          return { text: 'The motes dim and scatter, leaving charged residue behind. +' + g + ' scrap, -' + d + ' hull.' };
         } },
       { label: 'Let them drift on', run: function () { return { text: 'The hum fades behind you.' }; } }
     ]; } },
@@ -1866,8 +1871,7 @@ function makeStore(s) {
           return { text: 'The seal gives way. ' + RELICS[ctx.k].name + ' is bolted to the ' + loadoutOf(s).name + '. ' + RELICS[ctx.k].desc };
         } },
       { label: 'Strip the hull instead', hint: '+12 scrap',
-        run: function (s) { gainScrap(s, 12); return { text: 'You cut loose everything within reach. +12 scrap.' }; } },
-      { label: 'Fly on', run: function () { return { text: 'Some locks are not worth the time.' }; } }
+        run: function (s) { gainScrap(s, 12); return { text: 'You cut loose everything within reach. +12 scrap.' }; } }
     ]; } }
   ];
   /* NEW_EVENTS_APPLIED */
@@ -2651,7 +2655,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v17',
+      cache: 'vega-v18',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
