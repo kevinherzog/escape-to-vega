@@ -1809,7 +1809,7 @@ function makeStore(s) {
         } },
       { label: 'Watch from the bar', run: function () { return { text: 'You nurse a drink while a Syndicate ensign loses badly at the next table.' }; } }
     ]; } },
-  { id: 'relicvault', title: 'Sealed Vault', text: 'A derelict survey ship drifts past with its cargo vault still sealed. The lock is syndicate work.',
+  { id: 'relicvault', title: 'Syndicate Strongbox', text: 'A derelict survey ship drifts past with its cargo vault still sealed. The lock is syndicate work.',
     setup: function (s) { return { k: rollRelic(s, 1) }; },
     choices: function (s, ctx) { return [
       { label: 'Cut the vault open', hint: ctx.k ? RELICS[ctx.k].name : 'Nothing left in there', cost: 4,
@@ -2601,7 +2601,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v15',
+      cache: 'vega-v16',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
