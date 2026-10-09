@@ -845,6 +845,11 @@ function derive(s) {
     if (hasRelic(s, 'battery')) bonusShields += RELICS.battery.bonus;
     if (hasRelic(s, 'dread')) { shieldMax += RELICS.dread.shield; chargeMul += RELICS.dread.charge; }
     if (chargeMul < 0.3) chargeMul = 0.3;
+    // A hull with no shield generator has no layers, whatever the source. Blocking
+    // only the upgrade let technicians, Chorus Engine, Hoard Reactor and the
+    // Dreadnought Core quietly fit shields to a ship whose whole point is that it
+    // cannot have them. Crew-projected extra shields are a separate pool and stay.
+    if (loadoutOf(s).noShields) shieldMax = 0;
 
     return {
 
@@ -1777,7 +1782,7 @@ function makeStore(s) {
 
   { id: 'bay', title: 'Cargo Bay Refit', text: 'Dock workers at a half-abandoned yard offer to carve out another weapon mount, cash not required.',
     choices: function () { return [
-      { label: 'Let them weld through the hull', hint: 'Costs hull, not scrap', req: function (s) { return s.slots < 4; }, why: 'No room left for another mount',
+      { label: 'Let them weld through the hull', hint: 'Costs hull, not scrap', req: function (s) { return s.slots < Math.min(4, loadoutOf(s).maxSlots); }, why: 'No room left for another mount',
         run: function (s) { var d = hurt(s, R.int(4, 7)); s.slots++; return { text: 'Sparks fly for an hour and a new mount scars the plating. -' + d + ' hull, +1 weapon slot.' }; } },
       { label: 'Decline', run: function () { return { text: 'Your hull stays in one piece.' }; } }
     ]; } },
@@ -2596,7 +2601,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v13',
+      cache: 'vega-v14',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
