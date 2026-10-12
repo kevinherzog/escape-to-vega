@@ -776,7 +776,11 @@ function derive(s) {
 
     var shieldMax = s.shieldLv + (tt === 2 ? 2 : tt === 1 ? 1 : 0);
 
-    var te = T('engineer'); if (te === 2) repairRate *= 2;
+    // Four engineers already repair four times as fast as one. Doubling that on
+    // top made this the only crew track to scale superlinearly — 34 hull across a
+    // 60s fight at four aboard against 13 at three. The tier adds to the rate now
+    // rather than multiplying it.
+    var te = T('engineer'); if (te === 2) repairRate += 1 / 18;
 
     var ts = T('spark');
 
@@ -906,11 +910,11 @@ function derive(s) {
   // enemy numbers: tougher hulls, then more elites on the map, then a leaner
   // start, then pricier repairs. Unlocked one at a time by winning the one below.
   var DIFFS = [
-    { lv: 0, name: 'Courier',   blurb: 'The intended run.',                       ehull: 1.00, eshield: 0, ewcBig: 0, elite: 0,  hull: 0,  scrap: 0,  repair: 0 },
-    { lv: 1, name: 'Hunted',    blurb: 'Tougher ships. More elites on the map.',  ehull: 1.10, eshield: 0, ewcBig: 0, elite: 6,  hull: 0,  scrap: -2, repair: 0 },
-    { lv: 2, name: 'Blockade',  blurb: 'Everything carries a shield. Pricier repairs.', ehull: 1.16, eshield: 1, ewcBig: 0, elite: 10, hull: -2, scrap: -3, repair: 1 },
-    { lv: 3, name: 'Purge',     blurb: 'Elites and guardians gain a gun.',        ehull: 1.22, eshield: 1, ewcBig: 1, elite: 14, hull: -4, scrap: -4, repair: 2 },
-    { lv: 4, name: 'Nightfall', blurb: 'Everything, all at once.',                ehull: 1.30, eshield: 2, ewcBig: 1, elite: 18, hull: -6, scrap: -6, repair: 3 }
+    { lv: 0, name: 'Courier',   blurb: 'The intended run.',                       ehull: 1.00, eshield: 0, ewcBig: 0, elite: 0,  hull: 0,  scrap: 0,  repair: 0, pay: 1.00 },
+    { lv: 1, name: 'Hunted',    blurb: 'Tougher ships. More elites. Leaner salvage.', ehull: 1.10, eshield: 0, ewcBig: 0, elite: 6,  hull: 0,  scrap: -2, repair: 0, pay: 0.92 },
+    { lv: 2, name: 'Blockade',  blurb: 'Everything carries a shield. Pricier repairs.', ehull: 1.16, eshield: 1, ewcBig: 0, elite: 10, hull: -2, scrap: -3, repair: 1, pay: 0.84 },
+    { lv: 3, name: 'Purge',     blurb: 'Elites and guardians gain a gun. Salvage is thin.', ehull: 1.22, eshield: 1, ewcBig: 1, elite: 14, hull: -4, scrap: -4, repair: 2, pay: 0.74 },
+    { lv: 4, name: 'Nightfall', blurb: 'Everything, all at once.',                ehull: 1.30, eshield: 2, ewcBig: 1, elite: 18, hull: -6, scrap: -6, repair: 3, pay: 0.64 }
   ];
   function diffOf(s) { return DIFFS[(s && s.diff) || 0] || DIFFS[0]; }
 
@@ -1448,6 +1452,11 @@ function endCombat(s, c) {
       if (hasRelic(s, 'ledger')) scrap += Math.min(RELICS.ledger.cap, Math.floor(s.scrap * RELICS.ledger.rate)); // Syndicate Ledger
     }
     if (c.type !== 'boss' && sectorMod(s).scrapMul) scrap = Math.round(scrap * (1 + sectorMod(s).scrapMul));
+    // The hard tiers were handing out as much salvage as the easy one, so a good
+    // run on Nightfall finished with more scrap than it could spend. Enemies
+    // getting tougher while the payout stayed flat meant the economy, not the
+    // combat, was the thing that never tightened.
+    scrap = Math.round(scrap * (diffOf(s).pay || 1));
     scrap = Math.round(scrap * loadoutOf(s).scrapMul);
     s.scrap += scrap; s.stats.scrap += scrap;
     var before = s.hull;
@@ -2589,6 +2598,7 @@ function describeTaken(o, r) {
   }
 function viewStore() {
     var s = S.run, st = S.store, mh = L.maxHull(s);
+    var slotMax = Math.min(4, L.loadoutOf(s).maxSlots);
     var offers = st.offers.map(function (o, i) {
       var W = L.WEAPONS[o.k];
       return '<div class="offer' + (o.sold ? ' sold' : '') + '"><span class="otype"><span class="tag"><i class="wdot" data-k="' + o.k + '"></i>' + W.name + '</span></span>' +
@@ -2615,7 +2625,7 @@ function viewStore() {
       relicPanel +                                                            // NEW
       panel('Shipyard', '',
         '<div class="upgs"><div class="upg"><b>Patch Hull</b><span>+' + C.REPAIR_AMOUNT + ' hull · now ' + s.hull + ' / ' + mh + '</span><button class="btn btn-small" data-a="srep"' + (s.scrap >= L.repairPrice(s) && s.hull < mh ? '' : ' disabled') + '>' + cost(L.repairPrice(s)) + '</button></div>' +
-        '<div class="upg"><b>Install Weapon Slot</b><span>' + (s.slots >= 4 ? 'Already 4 slots' : 'Room for a fourth weapon') + '</span><button class="btn btn-small" data-a="sslot"' + (s.slots < 4 && s.scrap >= C.SLOT_COST ? '' : ' disabled') + '>' + (s.slots >= 4 ? 'Max.' : cost(C.SLOT_COST)) + '</button></div></div>') +
+        '<div class="upg"><b>Install Weapon Slot</b><span>' + (s.slots >= slotMax ? 'This hull takes no more' : 'Room for weapon ' + (s.slots + 1)) + '</span><button class="btn btn-small" data-a="sslot"' + (s.slots < slotMax && s.scrap >= C.SLOT_COST ? '' : ' disabled') + '>' + (s.slots >= slotMax ? 'Max.' : cost(C.SLOT_COST)) + '</button></div></div>') +
       footBar('Crew and upgrades are available in the hangar.', '<button class="btn btn-primary" data-a="sdone">Depart ' + ic('i-go') + '</button>');
   }
 
@@ -2698,7 +2708,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v19',
+      cache: 'vega-v20',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
