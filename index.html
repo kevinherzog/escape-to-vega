@@ -1994,6 +1994,78 @@ function makeStore(s) {
         } },
       { label: 'Strip the hull instead', hint: '+12 scrap',
         run: function (s) { gainScrap(s, 12); return { text: 'You cut loose everything within reach. +12 scrap.' }; } }
+    ]; } },
+{ id: 'indenture', title: 'Indenture Broker', text: 'A broker hails you about outstanding paper on your crew. Contracts are tradable property out here, and the broker is buying.',
+    setup: function (s) { return { id: s.crew.length ? R.pick(s.crew).id : null }; },
+    choices: function (s, ctx) {
+      function findM(st) { for (var i = 0; i < st.crew.length; i++) { if (st.crew[i].id === ctx.id) return st.crew[i]; } return null; }
+      var m = findM(s);
+      return [
+        { label: m ? 'Sell ' + m.name + '’s contract' : 'Sell a contract', hint: m ? typeLabel(m) + '. Above market rate.' : '',
+          req: function (s) { var mm = findM(s); return !!mm && s.crew.length > 1; },
+          why: function (s) { return s.crew.length <= 1 ? 'No one left to crew the ship' : 'There is no contract left to sell'; },
+          run: function (s) {
+            var mm = findM(s);
+            var name = mm ? mm.name : 'The crew member';
+            var base = sellCrew(s, ctx.id);
+            var premium = R.int(13, 19);
+            gainScrap(s, premium);
+            return { text: name + '’s contract changes hands. +' + (base + premium) + ' scrap.' };
+          } },
+        { label: 'Tell the broker to get lost', run: function () { return { text: 'The broker shrugs and cuts the channel.' }; } }
+      ];
+    } },
+
+  { id: 'auction', title: 'Black Market Lot', text: 'A pirate relay auctions off "recovered hardware, provenance withheld." Bidding is blind and non-refundable.',
+    setup: function (s) { return { k: rollRelic(s, 1) }; },
+    choices: function (s, ctx) {
+      var price = 10;
+      return [
+        { label: 'Place a blind bid', hint: ctx.k ? price + ' scrap. Might be ' + RELICS[ctx.k].name + '. Might be nothing.' : 'Nothing left on the lot for you', cost: price,
+          req: function (s) { return s.scrap >= price && !!ctx.k; },
+          why: function (s) { return s.scrap < price ? 'Not enough scrap' : 'You already own everything on offer'; },
+          run: function (s) {
+            s.scrap -= price;
+            if (R.chance(0.5)) {
+              addRelic(s, ctx.k);
+              return { text: 'The crate is yours. ' + RELICS[ctx.k].name + ' is bolted to the ' + loadoutOf(s).name + '. ' + RELICS[ctx.k].desc };
+            }
+            return { text: 'Outbid at the last second. The scrap is already spent.' };
+          } },
+        { label: 'Skip the auction', run: function () { return { text: 'You keep your scrap and your curiosity.' }; } }
+      ];
+    } },
+
+  { id: 'blacksite', title: 'Black Site', text: 'A corporate black site drifts dark under a biohazard seal that is almost certainly a bluff.',
+    setup: function (s) { return { k: rollRelic(s, 2) }; },
+    choices: function (s, ctx) {
+      var cost = 7;
+      return [
+        { label: 'Breach the seal', hint: ctx.k ? 'Costs scrap and hull. ' + RELICS[ctx.k].name : 'Already stripped bare', cost: cost,
+          req: function (s) { return s.scrap >= cost && !!ctx.k; },
+          why: function (s) { return s.scrap < cost ? 'Not enough scrap' : 'The site has already been stripped bare'; },
+          run: function (s) {
+            s.scrap -= cost;
+            var d = hurt(s, R.int(6, 9));
+            addRelic(s, ctx.k);
+            return { text: 'The seal was a bluff. The site was not. ' + RELICS[ctx.k].name + ' is bolted to the ' + loadoutOf(s).name + '. ' + RELICS[ctx.k].desc + ' -' + d + ' hull.' };
+          } },
+        { label: 'Read the transponder from a safe distance', hint: 'Safer. Pays less.',
+          run: function (s) {
+            if (R.chance(0.7)) { var g = R.int(7, 11); gainScrap(s, g); return { text: 'The transponder log alone is worth something to the right buyer. +' + g + ' scrap.' }; }
+            var d = hurt(s, R.int(3, 5));
+            return { text: 'A defense pulse catches you loitering. -' + d + ' hull.' };
+          } }
+      ];
+    } },
+
+  { id: 'wardrone', title: 'Picket Drone', text: 'A picket drone flags your transponder and demands clearance codes. Its weapon pod is already tracking you.',
+    choices: function (s) { return [
+      { label: 'Hand over the codes', cost: 7, req: function (s) { return s.scrap >= 7; }, why: 'Not enough scrap',
+        run: function (s) { s.scrap -= 7; return { text: 'It logs the codes and drifts aside.' }; } },
+      { label: 'Jam its targeting', hint: 'Needs 2 pilots', req: function (s) { return (counts(s).pilot || 0) >= 2; }, why: 'Not nimble enough to break its lock',
+        run: function () { return { text: 'Your pilots cut thrust at exactly the wrong moment for its targeting computer. It loses the lock.' }; } },
+      { label: 'Open fire', hint: 'Fight, +4 scrap in salvage', run: function () { return { text: 'You come about and power the guns.', combat: { type: 'fight', bonusScrap: 4 } }; } }
     ]; } }
   ];
   /* NEW_EVENTS_APPLIED */
@@ -2873,7 +2945,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v21',
+      cache: 'vega-v22',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
