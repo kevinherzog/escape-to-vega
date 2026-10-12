@@ -21,13 +21,17 @@ For the installable, offline, add-to-home-screen version it has to be served ove
 
 - **18 jumps**, split into three sectors. Each sector is five ordinary jumps plus a guardian that
   blocks the gate, and the third sector ends at the Leviathan.
+- **A branching map** per sector, generated up front. You can see the whole sector and route
+  through it — take the elite now to reach the broker two rows down, or slide left for the dock.
 - **Crew** have a role (gunner, pilot, technician, engineer) and an origin (human, crystalline,
-  insectoid, energy being). Three identical crew merge into one with more stars.
-- **Synergies** unlock at two and four of the same role *or* origin. Because every crew member
-  counts toward both, stacking four of one kind pays into two tracks at once — that is where the
-  genuinely broken builds come from.
-- **Relics** are permanent passives from loot, trading posts and one vault event. A few are mild.
-  A few, in the right build, are absurd.
+  insectoid, energy being). Three of a kind merge into a two-star member, and two of those merge
+  again into three stars.
+- **Synergies** unlock at two and four *distinct* crew sharing a role or an origin. A type already
+  aboard counts for nothing — duplicates are merge material only.
+- **Relics** are permanent passives from loot, trading posts and the relic broker, stacking without
+  limit. Most are mild. A few, lined up with the right crew, are absurd — deliberately, and rarely.
+- **Sector modifiers** are weather that holds for a whole sector: an ion storm slowing every
+  shield, a heavy patrol thick with elites. Most apply to the enemy too.
 - **Scrap** buys crew, weapons, repairs and upgrades, and earns interest between jumps, so sitting
   on it has a real cost and a real payoff.
 
@@ -36,6 +40,12 @@ For the installable, offline, add-to-home-screen version it has to be served ove
 Five tiers, each unlocked by winning the one below: Courier, Hunted, Blockade, Purge, Nightfall.
 Penalties ramp in by sector rather than applying flat, because a flat penalty turned the first
 guardian — mandatory, and impossible to flee — into a wall before the player had any tools.
+Higher tiers also pay less salvage, so the economy tightens along with the opposition instead of
+leaving a won hard run with more scrap than it could spend.
+
+There are five ships as well, unlocked by play. Each removes a capability and overpays elsewhere
+rather than shifting numbers: the Needle cannot fit a shield generator at all, the Hammerhead
+carries four guns in a hull with three bunks.
 
 ## Hosting
 
@@ -83,9 +93,27 @@ than breaking the save.
     sw.js                          service worker, offline cache
     manifest.webmanifest           PWA metadata
     icon-*.png                     home-screen icons
+    dev/explore.js                 random-play balance explorer, see below
     dev/relics-design-notes.md     design and integration notes for the relic system
+    dev/combat-readability-*       an unmerged prototype and its notes
 
 `index.html` holds two independent scripts: a pure game-logic module (`VEGA`) with no DOM access,
 and the UI on top of it. The logic module ends with a `module.exports`, so it can be loaded
 directly in Node — which is how the balance was tuned, by running whole campaigns headlessly and
 measuring win rates per build.
+
+## Measuring the balance
+
+    node dev/explore.js 20000 0 all
+
+Plays 20000 random runs in about ten seconds and reports what correlates with getting further.
+Two things about its method are load-bearing, and both exist because the naive version lied.
+
+It measures from a snapshot taken at the **end of sector 1**, not from what winners finished with.
+In a roguelite everything you accumulate correlates with surviving longer, because surviving
+longer is how you accumulate it — tallying finishers would rate every relic as excellent.
+
+And it **stratifies by ship and difficulty** before comparing. Pooled naively, the gunner synergy
+measured strongly negative while being positive on all five ships taken separately, because two
+ships start with gunners aboard and those two are independently the weakest. Simpson's paradox is
+not hypothetical here; it already produced one confidently-reported wrong conclusion.
