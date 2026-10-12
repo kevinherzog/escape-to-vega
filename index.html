@@ -217,6 +217,27 @@ button.wrow { cursor: pointer; }
 details.more summary { cursor: pointer; font-size: 13px; color: var(--muted); padding-block: 4px; }
 details.more[open] summary { margin-bottom: 6px; }
 
+/* ---------- Sector map ---------- */
+.smap { position: relative; margin: 4px 0 2px; }
+.smap-grid { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 62px; }
+.mlines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+.mlines .ml { stroke: var(--line); stroke-width: 0.04; }
+.mlines .ml.live { stroke: var(--signal); stroke-width: 0.07; }
+.mnode {
+  appearance: none; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+  color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; margin: 4px; padding: 2px; min-width: 0; font: 600 9.5px/1.1 var(--font-ui);
+  letter-spacing: 0.02em; text-align: center;
+}
+.mnode .ic { width: 20px; height: 20px; }
+.mnode span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.mnode.past { opacity: 0.35; }
+.mnode.open { color: var(--ink); border-color: var(--signal); cursor: pointer; min-height: 48px; }
+.mnode.open .ic { color: var(--signal); }
+.mnode.here { border-color: var(--ink); color: var(--ink); box-shadow: 0 0 0 1px var(--ink); opacity: 1; }
+.mnode[data-t="elite"] .ic, .mnode[data-t="guardian"] .ic, .mnode[data-t="boss"] .ic { color: var(--crit); }
+.mnode.open[data-t="elite"] .ic { color: var(--crit); }
+
 /* ---------- Run report ---------- */
 .helpbody p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
 .helpbody p:last-child { margin-bottom: 0; }
@@ -1005,6 +1026,7 @@ function newRun(diff, seedVal, shipKey) {
       relics: SHIP.relic ? [SHIP.relic] : [],
       rerolls: 0,
       sectorMod: rollSectorMod(),
+      map: null,
       shop: [], beacons: [],
       node: null,
       usedEvents: [],
@@ -1020,7 +1042,8 @@ function newRun(diff, seedVal, shipKey) {
       for (var ci = 0; ci < want; ci++) s.crew.push(makeCrew(s, roles[ci], origins[ci]));
     }
     rollShop(s);
-    s.beacons = genBeacons(s);
+    s.map = genSectorMap(s);
+    s.beacons = reachable(s);
     return s;
   }
 
@@ -1172,6 +1195,89 @@ function newRun(diff, seedVal, shipKey) {
   }
 
   // ---------- Star map ----------
+  // ---------- Sector map ----------
+  // A sector is a small branching map generated up front rather than 2-3 fresh
+  // choices each jump. You can see the whole sector and route through it, which
+  // is where the planning lives: taking the elite now to reach the broker later,
+  // or sliding left for the dock. Four columns, nodes centred, so it reads on a
+  // phone without scrolling.
+  var MAP_COLS = 4;
+  function rowTypes(s, row, width) {
+    var w = { fight: 40, event: 28, shop: 12, dock: 8,
+              elite: (s.sector > 1 || row >= 2) ? 12 + diffOf(s).elite : 0,
+              broker: s.sector >= 2 ? 10 : 0 };
+    var SMb = sectorMod(s);
+    if (w.elite && SMb.eliteMul != null) w.elite = Math.round(w.elite * SMb.eliteMul);
+    if (row === 0) w.dock = 0;
+    var out = [];
+    function pickType() {
+      var entries = Object.keys(w).filter(function (t) {
+        return w[t] > 0 && out.indexOf(t) < 0;
+      });
+      if (!entries.length) return 'fight';
+      var tot = entries.reduce(function (a, t) { return a + w[t]; }, 0);
+      var r = R.f() * tot;
+      for (var i = 0; i < entries.length; i++) { r -= w[entries[i]]; if (r < 0) return entries[i]; }
+      return entries[entries.length - 1];
+    }
+    for (var i = 0; i < width; i++) out.push(pickType());
+    // a sector always offers somewhere to spend, and never a wall of elites
+    if (row === 2 && out.indexOf('shop') < 0) out[out.length - 1] = 'shop';
+    var allElite = true;
+    for (var j = 0; j < out.length; j++) if (out[j] !== 'elite') allElite = false;
+    if (allElite) out[0] = 'fight';
+    return out;
+  }
+  function genSectorMap(s) {
+    var rows = [], r, i;
+    for (r = 0; r < C.SECTOR_LEN; r++) {
+      var width = r === 0 ? (R.chance(0.5) ? 2 : 3) : R.int(2, 4);
+      var types = rowTypes(s, r, width);
+      var start = Math.floor((MAP_COLS - width) / 2);
+      var row = [];
+      for (i = 0; i < width; i++) row.push({ t: types[i], col: start + i, to: [] });
+      rows.push(row);
+    }
+    rows.push([{ t: s.sector >= C.SECTORS ? 'boss' : 'guardian', col: 1, to: [] }]);
+    // Link each row forward. Every node gets an exit and every node in the next
+    // row gets an entrance, so no branch is a dead end and none is unreachable.
+    for (r = 0; r < rows.length - 1; r++) {
+      var a = rows[r], b = rows[r + 1];
+      for (i = 0; i < a.length; i++) {
+        var j = b.length === 1 ? 0 : Math.round(i * (b.length - 1) / Math.max(1, a.length - 1));
+        a[i].to.push(j);
+        // Two exits wherever the next row allows it. At a 45% chance of a second
+        // link most nodes were a forced move, which makes a corridor rather than
+        // a map and removes the routing the map exists to create.
+        if (b.length > 1) {
+          var alt = j + (R.chance(0.5) ? -1 : 1);
+          if (alt < 0 || alt >= b.length) alt = j + (alt < 0 ? 1 : -1);
+          if (alt >= 0 && alt < b.length && a[i].to.indexOf(alt) < 0) a[i].to.push(alt);
+        }
+      }
+      for (j = 0; j < b.length; j++) {
+        var hasIn = false;
+        for (i = 0; i < a.length; i++) if (a[i].to.indexOf(j) >= 0) hasIn = true;
+        if (!hasIn) {
+          var best = 0, bestD = 99;
+          for (i = 0; i < a.length; i++) {
+            var d = Math.abs(a[i].col - b[j].col);
+            if (d < bestD) { bestD = d; best = i; }
+          }
+          a[best].to.push(j);
+        }
+      }
+    }
+    return { rows: rows, row: -1, idx: 0 };
+  }
+  // The nodes you could jump to from where you stand.
+  function reachable(s) {
+    if (!s.map) return [];
+    if (s.map.row < 0) return s.map.rows[0].map(function (n, i) { return { type: n.t, row: 0, idx: i }; });
+    var cur = s.map.rows[s.map.row][s.map.idx];
+    if (s.map.row >= s.map.rows.length - 1) return [];
+    return cur.to.map(function (j) { return { type: s.map.rows[s.map.row + 1][j].t, row: s.map.row + 1, idx: j }; });
+  }
   function genBeacons(s) {
     if (s.jump >= C.SECTOR_LEN) return [{ type: s.sector >= C.SECTORS ? 'boss' : 'guardian' }];
     var w = { fight: 40, event: 28, shop: 12, dock: 8, elite: (s.sector > 1 || s.jump >= 2) ? 12 + diffOf(s).elite : 0,
@@ -1197,6 +1303,7 @@ function newRun(diff, seedVal, shipKey) {
   function jumpTo(s, i) {
     var b = s.beacons[i];
     if (!b) return null;
+    if (s.map && b.row != null) { s.map.row = b.row; s.map.idx = b.idx; }
     var gain = interest(s);
     s.scrap += gain; s.stats.scrap += gain;
     s.jump++; s.stats.jumps++;
@@ -1209,7 +1316,8 @@ function newRun(diff, seedVal, shipKey) {
     var sectorUp = false;
     if (s.node && s.node.type === 'guardian') { s.sector++; s.jump = 0; sectorUp = true; s.sectorMod = rollSectorMod(); }
     s.node = null;
-    s.beacons = genBeacons(s);
+    if (sectorUp) s.map = genSectorMap(s);
+    s.beacons = reachable(s);
     return sectorUp;
   }
   function dock(s) { var before = s.hull; s.hull = Math.min(maxHull(s), s.hull + C.DOCK_HEAL); return s.hull - before; }
@@ -1926,7 +2034,7 @@ function makeStore(s) {
     rollShop: rollShop, rerollPrice: rerollPrice, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, shopCopies: shopCopies, mergeBuyPlan: mergeBuyPlan, buyMerge: buyMerge, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
     upgradeCost: upgradeCost, upgrade: upgrade,
     weaponValue: weaponValue, sellWeapon: sellWeapon, replaceWeapon: replaceWeapon, giveWeapon: giveWeapon,
-    genBeacons: genBeacons, interest: interest, jumpTo: jumpTo, afterNode: afterNode, dock: dock,
+    genBeacons: genBeacons, genSectorMap: genSectorMap, reachable: reachable, interest: interest, jumpTo: jumpTo, afterNode: afterNode, dock: dock,
     makeEnemy: makeEnemy, startCombat: startCombat, heatFactor: heatFactor, stepCombat: stepCombat, flee: flee, endCombat: endCombat,
     makeLoot: makeLoot, takeLoot: takeLoot,
     makeStore: makeStore, makeBroker: makeBroker, brokerBuy: brokerBuy, brokerPrice: brokerPrice, storeBuy: storeBuy, repair: repair, buySlot: buySlot,
@@ -1970,7 +2078,20 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   function get(key) { try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function saveRun() { if (S.run && !S.run.dead && !S.run.won) put(SAVE_KEY, S.run); }
   function clearRun() { put(SAVE_KEY, undefined); }
-  function savedRun() { var r = get(SAVE_KEY); return r && r.v === 1 && r.crew && !r.dead && !r.won ? r : null; }
+  function savedRun() {
+    var r = get(SAVE_KEY);
+    if (!(r && r.v === 1 && r.crew && !r.dead && !r.won)) return null;
+    // A save written before sector maps existed has beacons but no map. Build
+    // one and drop the player in at the row matching the jump they had reached,
+    // so an in-flight run survives the update instead of loading into nothing.
+    if (!r.map) {
+      r.map = L.genSectorMap(r);
+      r.map.row = Math.min(Math.max(-1, (r.jump || 0) - 1), r.map.rows.length - 1);
+      r.map.idx = 0;
+      r.beacons = L.reachable(r);
+    }
+    return r;
+  }
   function record() { return get(REC_KEY) || { runs: 0, wins: 0, best: 0 }; }
   function addRecord(won) {
     var r = record();
@@ -2323,13 +2444,57 @@ function viewHangar() {
   }
 
   // ---------- Star map ----------
+  // The sector drawn as a branching map: four columns, one grid row per map
+  // row, links painted underneath by an SVG that shares the grid's coordinates
+  // so no DOM measuring is needed.
+  function sectorMapHtml(s) {
+    var m = s.map;
+    if (!m) return '';
+    var rows = m.rows, lines = '', cells = '', r, i;
+    for (r = 0; r < rows.length - 1; r++) {
+      for (i = 0; i < rows[r].length; i++) {
+        var from = rows[r][i];
+        for (var k = 0; k < from.to.length; k++) {
+          var to = rows[r + 1][from.to[k]];
+          var live = (m.row === r && m.idx === i) || (m.row < 0 && r === 0);
+          lines += '<line x1="' + (from.col + 0.5) + '" y1="' + (r + 0.5) + '" x2="' + (to.col + 0.5) +
+            '" y2="' + (r + 1.5) + '" class="ml' + (live ? ' live' : '') + '"/>';
+        }
+      }
+    }
+    var reach = {};
+    s.beacons.forEach(function (b, bi) { reach[b.row + ':' + b.idx] = bi; });
+    for (r = 0; r < rows.length; r++) {
+      for (i = 0; i < rows[r].length; i++) {
+        var n = rows[r][i];
+        var here = m.row === r && m.idx === i;
+        var key = r + ':' + i;
+        var bi = reach[key];
+        var past = r < m.row || (r === m.row && !here);
+        var cls = 'mnode' + (here ? ' here' : '') + (bi != null ? ' open' : '') + (past ? ' past' : '');
+        var style = 'grid-column:' + (n.col + 1) + ';grid-row:' + (r + 1) + ';';
+        if (bi != null) {
+          cells += '<button class="' + cls + '" style="' + style + '" data-a="jump" data-v="' + bi +
+            '" data-t="' + n.t + '" aria-label="' + L.NODES[n.t].name + '">' + ic(NODE_IC[n.t]) +
+            '<span>' + (NODE_SHORT[n.t] || n.t) + '</span></button>';
+        } else {
+          cells += '<div class="' + cls + '" style="' + style + '" data-t="' + n.t + '" title="' + L.NODES[n.t].name + '">' + ic(NODE_IC[n.t]) +
+            '<span>' + (NODE_SHORT[n.t] || n.t) + '</span></div>';
+        }
+      }
+    }
+    return '<div class="smap"><svg class="mlines" viewBox="0 0 ' + MAP_COLS_UI + ' ' + rows.length +
+      '" preserveAspectRatio="none" aria-hidden="true">' + lines + '</svg>' +
+      '<div class="smap-grid">' + cells + '</div></div>';
+  }
+  var MAP_COLS_UI = 4;
+  // Full node names truncate to "Enemy Conta…" in a quarter-width cell, so the
+  // map uses its own short labels. The long name stays on the aria-label.
+  var NODE_SHORT = { fight: 'Fight', elite: 'Elite', event: 'Signal', shop: 'Trade',
+                     dock: 'Dock', broker: 'Broker', guardian: 'Guardian', boss: 'Leviathan' };
   function viewMap() {
     var s = S.run, last = s.jump >= C.SECTOR_LEN;
-    var list = s.beacons.map(function (b, i) {
-      var N = L.NODES[b.type];
-      return '<button class="choice" data-a="jump" data-v="' + i + '" data-t="' + b.type + '">' + ic(NODE_IC[b.type]) +
-        '<b>' + N.name + '</b><span>' + N.hint + '</span>' + ic('i-go', 'go') + '</button>';
-    }).join('');
+    var list = sectorMapHtml(s);
     var text = last
       ? (s.sector >= C.SECTORS ? 'Vega lies directly beyond the flagship. There’s no avoiding it, and no fleeing either.' : 'A guardian blocks the jump gate into Sector ' + (s.sector + 1) + '. Fleeing isn’t possible here.')
       : 'The jump data shows what awaits you at the next point.';
@@ -2337,7 +2502,7 @@ function viewHangar() {
       panel(last ? 'Jump Gate' : 'Jump Destinations', 'Jump ' + (s.jump + 1) + ' of ' + (C.SECTOR_LEN + 1),
         (L.sectorMod(s).name === 'Clear Space' ? '' : '<p class="note pad"><b>' + L.sectorMod(s).name + '.</b> ' + L.sectorMod(s).desc + '</p>') +
         '<p class="note pad">' + text + '</p>') +
-      '<div class="choices">' + list + '</div>' +
+      list +
       footBar(L.interest(s) ? 'Interest on jump: <b class="num">+' + L.interest(s) + '</b>' : 'Interest kicks in at 10 scrap.', '<button class="btn" data-a="hangar">Hangar</button>');
   }
 
@@ -2708,7 +2873,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v20',
+      cache: 'vega-v21',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
