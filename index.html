@@ -31,6 +31,7 @@
   --signal-ink: #fff8f2;
   --brass: #855d00;       /* scrap */
   --shield: #1d6aa6;
+  --bonus: #7a4fd1;       /* bonus/extra shield layers, panel-safe twin of --bonus-screen */
   --ok: #2a7a45;
   --warn: #a86a00;
   --crit: #bb2e29;
@@ -61,7 +62,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1210; --panel: #161c18; --panel-2: #1d2520; --ink: #e1e8e0; --muted: #8f9d93; --line: #2c3630;
-    --signal: #ff6a2b; --signal-ink: #1b0c03; --brass: #e2ad3f; --shield: #5bb5f2;
+    --signal: #ff6a2b; --signal-ink: #1b0c03; --brass: #e2ad3f; --shield: #5bb5f2; --bonus: #b48bff;
     --ok: #52c47a; --warn: #f0a83a; --crit: #ff5e56; --focus: #5bb5f2;
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
@@ -69,7 +70,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0e1210; --panel: #161c18; --panel-2: #1d2520; --ink: #e1e8e0; --muted: #8f9d93; --line: #2c3630;
-  --signal: #ff6a2b; --signal-ink: #1b0c03; --brass: #e2ad3f; --shield: #5bb5f2;
+  --signal: #ff6a2b; --signal-ink: #1b0c03; --brass: #e2ad3f; --shield: #5bb5f2; --bonus: #b48bff;
   --ok: #52c47a; --warn: #f0a83a; --crit: #ff5e56; --focus: #5bb5f2;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
@@ -382,19 +383,31 @@ details.more .helpbody { padding: 2px 8px 8px; }
 .sidep-name { font: 800 22px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; overflow-wrap: anywhere; }
 .sidep-name.foe { color: var(--crit); }
 .sidep-meta { font: 600 12px/1.2 var(--font-data); color: var(--muted); white-space: nowrap; }
-.spips { display: flex; gap: 4px; align-items: center; min-height: 14px; flex-wrap: wrap; }
-.spip { width: 18px; height: 10px; border: 1.5px solid var(--shield); border-radius: 2px; position: relative; overflow: hidden; }
+.shieldsrow { display: flex; flex-direction: column; gap: 4px; }
+.spips { display: flex; gap: 3px; align-items: center; min-height: 14px; flex-wrap: wrap; }
+.spip { width: 15px; height: 10px; border: 1.5px solid var(--shield); border-radius: 2px; position: relative; overflow: hidden; flex: none; }
 .spip.on { background: var(--shield); }
 .spip > i { position: absolute; inset: 0 auto 0 0; background: var(--shield); opacity: 0.35; }
-.spip.bonus { border-style: dashed; border-color: var(--muted); }
-.spip.bonus.on { background: var(--muted); }
+.spip.bonus { border-style: dashed; border-color: var(--bonus); }
+.spip.bonus.on { background: var(--bonus); }
+.spip.bonus > i { background: var(--bonus); }
 .spip.lock { border-color: var(--crit); }
 .slabel { font: 600 11px/1 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.snum { font: 600 11px/1 var(--font-data); color: var(--muted); font-variant-numeric: tabular-nums; }
+.snum .bn { color: var(--bonus); }
 .wcharge { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 4px 10px; }
 .wc { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); min-width: 0; }
-.wc span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wctop { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; min-width: 0; }
+.wcname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.jamtag { display: none; flex: none; color: var(--w-ion); font: 700 10px/1.2 var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; }
+.wc.jammed .jamtag { display: inline; }
 .wc .cb { height: 4px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
 .wc .cb > i { display: block; height: 100%; width: 100%; background: var(--signal); transform-origin: left; transform: scaleX(0); }
+.wc.jammed .cb { background: repeating-linear-gradient(45deg, var(--panel-2) 0 3px, var(--line) 3px 6px); }
+.wc.jammed .cb > i { background: var(--w-ion); animation: jampulse 0.9s ease-in-out infinite; }
+@keyframes jampulse { 50% { opacity: 0.45; } }
+.traits { display: flex; flex-wrap: wrap; gap: 6px; }
+.trait { font: 600 10.5px/1.3 var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 2px 6px; }
 
 .lane { height: clamp(240px, calc(100vh - 380px), 520px); height: clamp(240px, calc(100svh - 380px), 520px); }
 .lane .ship { position: absolute; left: 50%; transform: translate(-50%, -50%); width: 64px; height: 64px; z-index: 1; }
@@ -429,6 +442,7 @@ details.more .helpbody { padding: 2px 8px 8px; }
 .lane-msg.intro { animation: fadeout 1.6s ease-in forwards; font: 800 26px/1 var(--font-display); letter-spacing: 0.04em; }
 .lane-rage { position: absolute; right: 8px; top: 8px; z-index: 3; font: 700 10.5px/1 var(--font-data); letter-spacing: 0.1em; color: var(--foe); animation: blink 0.6s steps(2) infinite; }
 .lane-heat { position: absolute; left: 8px; top: 8px; z-index: 3; font: 600 10.5px/1 var(--font-data); letter-spacing: 0.1em; color: var(--foe); animation: blink 1s steps(2) infinite; }
+.lane-break { position: absolute; left: 8px; right: 8px; top: 25px; z-index: 3; text-align: center; font: 600 10.5px/1 var(--font-data); letter-spacing: 0.1em; color: var(--foe); animation: blink 1.4s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0.25; } }
 @keyframes fadeout { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 .ctrl { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
@@ -458,8 +472,9 @@ details.more .helpbody { padding: 2px 8px 8px; }
 @media (prefers-reduced-motion: reduce) {
   .ship.hit { animation: none; }
   .fx { animation: fadeout 0.95s linear forwards; }
-  .lane-heat { animation: none; }
+  .lane-heat, .lane-rage, .lane-break { animation: none; }
   .bar > i { transition: none; }
+  .wc.jammed .cb > i { animation: none; }
 }
 @media (min-width: 520px) {
   .loot { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
@@ -2579,14 +2594,16 @@ function viewHangar() {
   }
 
   // ---------- Combat ----------
-  var refs = null, shotEls = {}, loopId = 0;
+  var refs = null, shotEls = {}, loopId = 0, cstats = null;
   function sidePanel(sd, k) {
-    var w = sd.w.map(function (x, i) { return '<div class="wc"><span>' + L.WEAPONS[x.k].name + '</span><div class="cb"><i id="wc-' + k + '-' + i + '"></i></div></div>'; }).join('');
+    var w = sd.w.map(function (x, i) { return '<div class="wc"><div class="wctop"><span class="wcname">' + L.WEAPONS[x.k].name + '</span><em class="jamtag">jammed</em></div><div class="cb"><i id="wc-' + k + '-' + i + '"></i></div></div>'; }).join('');
+    var traits = (sd.boarding ? '<span class="trait">Boarding party</span>' : '') + (sd.repairEvery ? '<span class="trait">Self-repairing</span>' : '');
     return '<div class="sidep">' +
       '<div class="sidep-head"><span class="sidep-name' + (k === 'e' ? ' foe' : '') + '">' + sd.name + '</span><span class="sidep-meta">Evasion ' + Math.round(sd.evasion * 100) + '%</span></div>' +
       '<div id="hb-' + k + '">' + hullBar(sd.hull, sd.maxHull) + '</div>' +
-      '<div class="spips"><span class="slabel">Shields</span><span id="sp-' + k + '" class="spips"></span></div>' +
+      '<div class="shieldsrow"><span class="slabel">Shields</span><span id="sn-' + k + '" class="snum"></span><span id="sp-' + k + '" class="spips"></span></div>' +
       (w ? '<div class="wcharge">' + w + '</div>' : '') +
+      (traits ? '<div class="traits">' + traits + '</div>' : '') +
       '</div>';
   }
   function viewCombat() {
@@ -2598,6 +2615,7 @@ function viewHangar() {
       '<div class="screen lane" id="lane" aria-hidden="true">' +
         '<div class="lane-heat" id="heat" hidden>Shields overheating</div>' +
         '<div class="lane-rage" id="rage" hidden>Leviathan enraged</div>' +
+        '<div class="lane-break" id="brk" hidden>Hull integrity failing</div>' +
         '<div class="ship ship-e' + (c.type === 'boss' ? ' boss' : '') + '" id="ship-e"><div class="bubble bonus" id="bb-e"></div><div class="bubble" id="bu-e"></div>' + (c.type === 'boss' ? SHIP_B : SHIP_E) + '</div>' +
         '<div class="ship ship-p" id="ship-p"><div class="bubble bonus" id="bb-p"></div><div class="bubble" id="bu-p"></div>' + SHIP_P + '</div>' +
         '<div class="shots" id="shots"></div><div class="fxl" id="fxl"></div>' +
@@ -2614,13 +2632,14 @@ function viewHangar() {
   }
   function sideRefs(k) {
     return {
-      hb: $('#hb-' + k), sp: $('#sp-' + k), ship: $('#ship-' + k), bu: $('#bu-' + k), bb: $('#bb-' + k),
+      hb: $('#hb-' + k), sp: $('#sp-' + k), sn: $('#sn-' + k), ship: $('#ship-' + k), bu: $('#bu-' + k), bb: $('#bb-' + k),
       w: S.combat[k].w.map(function (x, i) { return $('#wc-' + k + '-' + i); }), key: '', hkey: ''
     };
   }
   function bindCombat() {
-    refs = { shots: $('#shots'), fxl: $('#fxl'), heat: $('#heat'), rage: $('#rage'), cend: $('#cend'), flee: $('#flee'), fleefill: $('#fleefill'), fleetxt: $('#fleetxt'), e: sideRefs('e'), p: sideRefs('p') };
+    refs = { shots: $('#shots'), fxl: $('#fxl'), heat: $('#heat'), rage: $('#rage'), brk: $('#brk'), cend: $('#cend'), flee: $('#flee'), fleefill: $('#fleefill'), fleetxt: $('#fleetxt'), e: sideRefs('e'), p: sideRefs('p') };
     shotEls = {};
+    cstats = { pBlocked: 0, pHit: 0, pEvaded: 0, eBlocked: 0, eHit: 0, eEvaded: 0 };
   }
   function pipsHtml(sd) {
     var h = '';
@@ -2636,16 +2655,31 @@ function viewHangar() {
     }
     return h || '<span class="slabel">none</span>';
   }
+  // A plain count next to the pips: the pips show "shields are discrete, watch them pop one
+  // at a time," the number exists purely so the exact total is never lost to wrapping or a
+  // quick glance that doesn't stop to count squares.
+  function shieldNumText(sd) {
+    if (!sd.shieldMax && !sd.bonusMax) return '';
+    var t = sd.shields + '/' + sd.shieldMax;
+    if (sd.bonusMax) t += ' <span class="bn">+' + sd.bonus + '/' + sd.bonusMax + '</span>';
+    return t;
+  }
   function drawCombat(c) {
     ['e', 'p'].forEach(function (k) {
       var sd = c[k], r = refs[k];
       var hk = sd.hull + '/' + sd.maxHull;
       if (hk !== r.hkey) { r.hkey = hk; r.hb.innerHTML = hullBar(sd.hull, sd.maxHull); }
       var sk = sd.shields + '|' + sd.shieldMax + '|' + sd.bonus + '|' + Math.floor(sd.shieldProg * 10) + '|' + Math.floor(sd.bonusProg * 10) + '|' + (sd.shieldLock > 0 ? 1 : 0);
-      if (sk !== r.key) { r.key = sk; r.sp.innerHTML = pipsHtml(sd); }
+      if (sk !== r.key) { r.key = sk; r.sp.innerHTML = pipsHtml(sd); if (r.sn) r.sn.innerHTML = shieldNumText(sd); }
       r.bu.style.opacity = sd.shields > 0 ? String(0.25 + 0.15 * Math.min(4, sd.shields)) : '0';
       r.bb.style.opacity = sd.bonus > 0 ? '0.8' : '0';
-      for (var i = 0; i < sd.w.length; i++) if (r.w[i]) r.w[i].style.transform = 'scaleX(' + Math.min(1, sd.w[i].p).toFixed(3) + ')';
+      for (var i = 0; i < sd.w.length; i++) {
+        if (!r.w[i]) continue;
+        r.w[i].style.transform = 'scaleX(' + Math.min(1, sd.w[i].p).toFixed(3) + ')';
+        var jammed = sd.w[i].jam > 0;
+        var wrap = r.w[i].parentNode && r.w[i].parentNode.parentNode;
+        if (wrap) wrap.classList.toggle('jammed', jammed);
+      }
     });
     drawShots(c);
     while (c.fx.length) spawnFx(c.fx.shift());
@@ -2654,6 +2688,7 @@ function viewHangar() {
       var e = c.e;
       refs.rage.hidden = !(e.enrage && e.hull > 0 && e.hull <= e.maxHull * e.enrage.at) || c.over;
     }
+    if (refs.brk) refs.brk.hidden = c.t <= C.BREAKDOWN || c.over;
     if (refs.flee) {
       refs.fleefill.style.transform = 'scaleX(' + c.flee.toFixed(3) + ')';
       var ready = c.flee >= 1 && !c.over;
@@ -2945,7 +2980,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v22',
+      cache: 'vega-v23',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
