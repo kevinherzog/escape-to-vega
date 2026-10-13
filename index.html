@@ -257,7 +257,9 @@ details.more .helpbody { padding: 2px 8px 8px; }
 .diffrow.on small { color: var(--ink); }
 
 .rellist { display: flex; flex-direction: column; gap: 8px; }
-.relrow { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 10px; align-items: center; }
+.relrow { display: grid; grid-template-columns: 20px 1fr auto; gap: 2px 10px; align-items: center;
+  width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 6px 2px; cursor: pointer; }
+.relrow[aria-pressed="true"] { background: var(--panel-2); border-radius: var(--r); }
 .relrow .ic { color: var(--signal); }
 .relname { font-weight: 600; font-size: 14px; }
 .reldesc { grid-column: 2 / 4; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
@@ -682,6 +684,19 @@ var VEGA = (function () {
 
   function hasRelic(s, k) { return !!(s.relics && s.relics.indexOf(k) >= 0); }
   function relicPrice(k) { return RELIC_PRICE[RELICS[k].tier]; }
+  // Half what a trading post charges, so stripping one and rebuying is always a
+  // loss. A relic that cannot help your hull — a Prism Lens with no beam, a Hive
+  // Resonator with no Insectoids — was the one thing in the game with no exit,
+  // since weapons and crew can both be sold.
+  function relicValue(k) { return RELICS[k] ? Math.floor(relicPrice(k) / 2) : 0; }
+  function sellRelic(s, k) {
+    if (!s.relics || s.relics.indexOf(k) < 0 || !RELICS[k]) return 0;
+    s.relics = s.relics.filter(function (x) { return x !== k; });
+    var v = relicValue(k);
+    s.scrap += v; s.stats.scrap += v;
+    syncHull(s);
+    return v;
+  }
   function relicsOwned(s) {
     return (s.relics || []).filter(function (k) { return !!RELICS[k]; }).map(function (k) { return RELICS[k]; });
   }
@@ -1093,8 +1108,8 @@ function newRun(diff, seedVal, shipKey) {
     }
     return result;
   }
-  function addCrew(s, role, origin) {
-    var m = makeCrew(s, role, origin, 1);
+  function addCrew(s, role, origin, stars) {
+    var m = makeCrew(s, role, origin, stars || 1);
     s.crew.push(m);
     var merged = mergeCheck(s, role, origin);
     syncHull(s);
@@ -1798,8 +1813,12 @@ function makeStore(s) {
     { id: 'mercs', title: 'Mercenary', text: 'A mercenary offers her services.',
       setup: function () { return { t: randomType() }; },
       choices: function (s, ctx) { return [
-        { label: 'Hire', hint: typeLabel(ctx.t), cost: 5, req: function (s) { return s.scrap >= 5 && canRecruit(s, ctx.t.role, ctx.t.origin); }, why: function (s) { return s.scrap < 5 ? 'Not enough scrap' : 'No room on board'; }, run: function (s) {
-          s.scrap -= 5; return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) };
+        { label: 'Hire', hint: typeLabel(ctx.t) + ' · already two stars', cost: 5, req: function (s) { return s.scrap >= 5 && canRecruit(s, ctx.t.role, ctx.t.origin); }, why: function (s) { return s.scrap < 5 ? 'Not enough scrap' : 'No room on board'; }, run: function (s) {
+          // At one star this was strictly worse than the recruit shop: 5 scrap for
+          // a type you did not pick, against 3 for any of five you can see, with a
+          // fresh five every jump. A mercenary is a veteran, so she arrives at two
+          // stars — which the shop would charge three hires and a merge to reach.
+          s.scrap -= 5; return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin, 2)) };
         } },
         { label: 'Decline', run: function () { return { text: 'She shrugs and looks for another ship.' }; } }
       ]; } },
@@ -2129,7 +2148,7 @@ function makeStore(s) {
     LOADOUTS: LOADOUTS, loadoutOf: loadoutOf, crewPrice: crewPrice,
     SECTOR_MODS: SECTOR_MODS, sectorMod: sectorMod, modEvasion: modEvasion,
     RELICS: RELICS, RELIC_KEYS: RELIC_KEYS,
-    hasRelic: hasRelic, addRelic: addRelic, rollRelic: rollRelic,
+    hasRelic: hasRelic, addRelic: addRelic, rollRelic: rollRelic, relicValue: relicValue, sellRelic: sellRelic,
     relicPrice: relicPrice, relicsOwned: relicsOwned, storeBuyRelic: storeBuyRelic,
     startEvent: startEvent, eventView: eventView, chooseEvent: chooseEvent, typeLabel: typeLabel
   };
@@ -2153,7 +2172,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     combat: null, result: null,
     event: null, eventOut: null,
     store: null, broker: null, reward: null, replace: null, dockHeal: 0,
-    sel: { crew: null, weapon: null },
+    sel: { crew: null, weapon: null, relic: null },
     synOpen: false,
     speed: 2,
     diff: 0,
@@ -2443,9 +2462,15 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
         '<p class="note pad">Relics bolt onto the hull for the rest of the flight. Watch for them in loot, trading posts and unknown signals.</p>');
     }
     var rows = list.map(function (r) {
-      return '<div class="relrow">' + ic(RELIC_IC[r.key]) +
-        '<span class="relname">' + r.name + '</span>' + relicBadge(r) +
-        '<span class="reldesc">' + r.desc + '</span></div>';
+      var sel = S.sel.relic === r.key;
+      var html = '<button class="relrow" data-a="selrel" data-v="' + r.key + '" aria-pressed="' + sel + '">' +
+        ic(RELIC_IC[r.key]) + '<span class="relname">' + r.name + '</span>' + relicBadge(r) +
+        '<span class="reldesc">' + r.desc + '</span></button>';
+      if (sel) {
+        html += '<div class="sellbar"><span class="note">Stripping it out earns ' + L.relicValue(r.key) + ' scrap.</span>' +
+          '<button class="btn btn-small" data-a="sellrel" data-v="' + r.key + '">Strip</button></div>';
+      }
+      return html;
     }).join('');
     return panel('Relics', list.length + ' fitted', '<div class="rellist">' + rows + '</div>');
   }
@@ -2980,7 +3005,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v23',
+      cache: 'vega-v24',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
@@ -3087,6 +3112,12 @@ function viewStore() {
       S.sel.crew = null; render();
     },
     'selw': function (v) { S.sel.weapon = S.sel.weapon === +v ? null : +v; render(); },
+    'selrel': function (v) { S.sel.relic = S.sel.relic === v ? null : v; render(); },
+    'sellrel': function (v) {
+      var r = L.RELICS[v], got = L.sellRelic(S.run, v);
+      if (got) toast((r ? r.name : 'Relic') + ' stripped out: +' + got + ' scrap');
+      S.sel.relic = null; render();
+    },
     'sellw': function (v) { var got = L.sellWeapon(S.run, +v); if (got) toast('Weapon removed: +' + got + ' scrap'); S.sel.weapon = null; render(); },
     'speed': function (v) {
       S.speed = +v; put(SPEED_KEY, S.speed);
