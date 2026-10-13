@@ -379,7 +379,7 @@ details.more .helpbody { padding: 2px 8px 8px; }
 .loot { display: grid; grid-template-columns: 1fr; gap: 8px; }
 
 /* ---------- Combat ---------- */
-.combat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; }
+.combat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; height: calc(100vh - 12px); height: calc(100svh - 12px); }
 .sidep { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; box-shadow: var(--shadow); }
 .sidep-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .sidep-name { font: 800 22px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; overflow-wrap: anywhere; }
@@ -411,7 +411,22 @@ details.more .helpbody { padding: 2px 8px 8px; }
 .traits { display: flex; flex-wrap: wrap; gap: 6px; }
 .trait { font: 600 10.5px/1.3 var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 2px 6px; }
 
-.lane { height: clamp(240px, calc(100vh - 380px), 520px); height: clamp(240px, calc(100svh - 380px), 520px); }
+/* The lane takes whatever the panels leave rather than a fixed subtraction. It
+   was calc(100vh - 380px), which assumed a panel height — then the side panels
+   grew a shields row and trait chips and the controls fell 96px off the bottom
+   of a 390x844 screen, putting the flee button out of reach mid-fight. */
+.lane { flex: 1 1 auto; min-height: 170px; }
+/* On a very short screen the two side panels alone outgrow the viewport, so the
+   lane cannot give back any more room. Trim the panels instead: the trait chips
+   and the weapon charge bars are the first things that can go without losing
+   anything the fight is decided by. */
+@media (max-height: 620px) {
+  .sidep { padding: 7px 10px; gap: 4px; }
+  .sidep-name { font-size: 18px; }
+  .combat .traits { display: none; }
+  .wcharge { gap: 2px 8px; }
+  .lane { min-height: 140px; }
+}
 .lane .ship { position: absolute; left: 50%; transform: translate(-50%, -50%); width: 64px; height: 64px; z-index: 1; }
 .lane .ship svg { width: 100%; height: 100%; overflow: visible; }
 .ship-e { top: 19%; color: var(--foe); }
@@ -3005,7 +3020,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v24',
+      cache: 'vega-v25',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
