@@ -1458,7 +1458,7 @@ function startCombat(s, type, opts) {
     return {
       type: type, p: p, e: e, t: 0, shots: [], fx: [], over: false, winner: null,
       flee: 0, canFlee: type === 'fight' || type === 'elite',
-      bonusScrap: opts.bonusScrap || 0, nextShot: 1,
+      bonusScrap: opts.bonusScrap || 0, thanks: opts.thanks || null, nextShot: 1,
       dealt: 0                                             // NEW - total damage dealt (Salvage Lathe)
     };
   }
@@ -1615,10 +1615,27 @@ function endCombat(s, c) {
     s.scrap += scrap; s.stats.scrap += scrap;
     var before = s.hull;
     s.hull = Math.min(maxHull(s), s.hull + d.healAfter);
+    // Someone else was in that fight. Standing up for them pays in a currency the
+    // salvage does not — a hull patched, or a survivor who signs on. Fleeing
+    // forfeits it, which is what makes the risk a decision rather than a tax.
+    var thanks = null;
+    if (c.thanks && c.winner === 'p') {
+      if (c.thanks === 'repair') {
+        var h = Math.min(maxHull(s) - s.hull, R.int(8, 14));
+        if (h > 0) { s.hull += h; thanks = { kind: 'repair', amount: h }; }
+        else { s.scrap += 6; s.stats.scrap += 6; thanks = { kind: 'scrap', amount: 6 }; }
+      } else if (c.thanks === 'crew') {
+        var tt2 = randomType();
+        if (canRecruit(s, tt2.role, tt2.origin)) {
+          var rr = addCrew(s, tt2.role, tt2.origin);
+          thanks = { kind: 'crew', member: rr.member, merged: rr.merged };
+        } else { s.scrap += 7; s.stats.scrap += 7; thanks = { kind: 'scrap', amount: 7 }; }
+      }
+    }
     var loot = null;
     if (c.type === 'elite' || c.type === 'guardian' || (c.type === 'fight' && R.chance(0.3))) loot = makeLoot(s, c.type);
     if (c.type === 'boss') s.won = true;
-    return { scrap: scrap, healed: s.hull - before, loot: loot, boss: c.type === 'boss' };
+    return { scrap: scrap, healed: s.hull - before, loot: loot, thanks: thanks, boss: c.type === 'boss' };
   }
 
   // ---------- Loot ----------
@@ -1747,7 +1764,7 @@ function makeStore(s) {
   var EVENTS = [
     { id: 'distress', title: 'Distress Call', text: 'A freighter is calling for help. A pirate boat is on its tail.',
       choices: function () { return [
-        { label: 'Intervene', hint: 'Combat, then +6 scrap reward', run: function () { return { text: 'You set an intercept course. The pirates turn to face you.', combat: { type: 'fight', bonusScrap: 6 } }; } },
+        { label: 'Intervene', hint: 'Combat. The freighter will owe you', run: function () { return { text: 'You set an intercept course. The pirates turn to face you.', combat: { type: 'fight', bonusScrap: 6, thanks: 'repair' } }; } },
         { label: 'Fly on', run: function () { return { text: 'You leave the freighter behind. The transmission cuts out.' }; } }
       ]; } },
     { id: 'wreck', title: 'Drifting Wreck', text: 'A burned-out wreck, its emergency lights still flickering.',
@@ -1897,7 +1914,7 @@ function makeStore(s) {
 
   { id: 'hijack', title: 'Hijacked Freighter', text: 'A freighter squawks a hijack code on an open channel. Shapes move behind its cockpit glass.',
     choices: function () { return [
-      { label: 'Storm it', hint: 'Fight, +5 scrap if you win', run: function () { return { text: 'You match velocity and breach.', combat: { type: 'fight', bonusScrap: 5 } }; } },
+      { label: 'Storm it', hint: 'Fight. Whoever is left aboard may sign on', run: function () { return { text: 'You match velocity and breach.', combat: { type: 'fight', bonusScrap: 5, thanks: 'crew' } }; } },
       { label: 'Sell the hijack code to a rival crew', run: function (s) { var g = R.int(6, 10); gainScrap(s, g); return { text: 'Not your problem anymore. +' + g + ' scrap.' }; } },
       { label: 'Warn it off and move on', hint: 'They patch you up in thanks', run: function (s) {
           var h = heal(s, 6);
@@ -1911,7 +1928,7 @@ function makeStore(s) {
         run: function (s) { s.scrap -= 7; return { text: 'The drone stamps the manifest and peels away.' }; } },
       { label: 'Forge the maintenance log', hint: 'Needs an engineer aboard', req: function (s) { return (counts(s).engineer || 0) >= 1; }, why: 'No engineer aboard to forge the paperwork',
         run: function () { return { text: 'Your engineer backdates three refits and signs a name that is not theirs. The drone buys it.' }; } },
-      { label: 'Shoot the drone down', hint: 'Fight, +4 scrap in parts', run: function () { return { text: 'The drone raises its shields and returns fire.', combat: { type: 'fight', bonusScrap: 4 } }; } }
+      { label: 'Shoot the drone down', hint: 'Fight. The yard it was bothering will patch you up', run: function () { return { text: 'The drone raises its shields and returns fire.', combat: { type: 'fight', bonusScrap: 4, thanks: 'repair' } }; } }
     ]; } },
 
   { id: 'jammer', title: 'Jamming Buoy', text: 'A pirate buoy chokes the comm channels with static, the same trick they use to blind merchant convoys.',
@@ -2865,7 +2882,8 @@ function lootButton(o, i) {
   function viewReward() {
     var rw = S.reward;
     var gains = '<div class="gains"><div>' + ic('i-scrap') + ' <span class="num">+' + rw.scrap + '</span> Scrap</div>' +
-      (rw.healed ? '<div>' + ic('i-hull') + ' <span class="num">+' + rw.healed + '</span> Hull, repaired by your engineers</div>' : '') + '</div>';
+      (rw.healed ? '<div>' + ic('i-hull') + ' <span class="num">+' + rw.healed + '</span> Hull, repaired by your engineers</div>' : '') +
+      (rw.thanks ? '<div>' + thanksLine(rw.thanks) + '</div>' : '') + '</div>';
     var loot = '';
     if (rw.loot && !rw.taken) {
       loot = panel('Loot', 'choose one', '<div class="loot">' + rw.loot.map(lootButton).join('') + '</div><button class="btn" data-a="lootskip">Take nothing</button>');
@@ -2874,6 +2892,11 @@ function lootButton(o, i) {
     return topBar() + panel(rw.quiet ? 'Salvage' : 'Battle Won', '',
         '<h1 class="ev-title">' + rw.name + '</h1>' + (rw.quiet ? '<p class="note pad">Worth picking over before you move on.</p>' : gains)) + loot +
       footBar(canGo ? '' : 'Choose your loot first.', '<button class="btn btn-primary" data-a="rdone"' + (canGo ? '' : ' disabled') + '>Continue ' + ic('i-go') + '</button>');
+  }
+function thanksLine(t) {
+    if (t.kind === 'repair') return ic('i-hull') + ' <span class="num">+' + t.amount + '</span> hull, patched by the ship you stood up for';
+    if (t.kind === 'crew') return ic('i-human') + ' ' + t.member.name + (t.merged ? ' joins, merging to ' + t.member.stars + ' stars' : ' signs on out of gratitude');
+    return ic('i-scrap') + ' <span class="num">+' + t.amount + '</span> scrap, pressed on you by way of thanks';
   }
 function describeTaken(o, r) {
     if (o.kind === 'weapon') return L.WEAPONS[o.k].name + ' is installed.';
@@ -3033,7 +3056,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v27',
+      cache: 'vega-v28',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
@@ -3159,7 +3182,7 @@ function viewStore() {
       if (r.dead) { go('over'); return; }
       if (r.boss) { go('win'); return; }
       if (r.fled) { finishNode(); return; }
-      S.reward = { name: c.e.name, scrap: r.scrap, healed: r.healed, loot: r.loot, taken: null };
+      S.reward = { name: c.e.name, scrap: r.scrap, healed: r.healed, loot: r.loot, thanks: r.thanks, taken: null };
       go('reward');
     },
     'loot': function (v) {
