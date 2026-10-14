@@ -938,6 +938,7 @@ function derive(s) {
       chargeMul: chargeMul,
 
       evasion: Math.max(0, Math.min(evasion, C.EVASION_CAP)),
+      evasionRaw: Math.max(0, Math.round(evasion)),
 
       shieldMax: shieldMax,
 
@@ -2363,7 +2364,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
           '<p>Nobody steers. Every weapon fires the moment it finishes charging, and keeps firing until one ship is gone.</p>' +
           '<p><b>Each shield layer stops one incoming shot, whatever that shot was going to do.</b> A 5-damage Railgun slug and a 1-damage pellet are both swallowed by a single layer. This is the most important rule in the game: against shields, <em>many small shots beat one big one</em>.</p>' +
           '<p>Shields recharge on a timer. Past about half a minute of shooting the generators overheat and recharge ever more slowly, so long fights favour whoever is still landing hits.</p>' +
-          '<p>Evasion is a flat chance that an incoming shot misses entirely. A fight that drags on far too long starts tearing both ships apart.</p>') +
+          '<p>Evasion is a flat chance that an incoming shot misses entirely. <b>It is capped at 60%.</b> Pilots, engine levels and evasion relics all keep costing you after that, and buy nothing — the hangar marks the stat once you reach it.</p>' +
+          '<p>A fight that drags on far too long starts tearing both ships apart.</p>') +
         helpSection('The four kinds of weapon', false,
           '<p><b>Projectile</b> — laser, flak, railgun and the rest. Can be evaded, and one shield layer stops one shot.</p>' +
           '<p><b>Missile</b> — ignores shields completely, but can still be evaded.</p>' +
@@ -2413,7 +2415,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     var items = [
       ['Shields', d.shieldMax + '<small> ' + (d.shieldMax === 1 ? 'layer' : 'layers') + (d.bonusShields ? ' + ' + d.bonusShields + ' extra' : '') + '</small>'],
       ['Shield Charge', fmt(d.shieldRegen) + '<small> s per layer</small>'],
-      ['Evasion', d.evasion + '<small> %</small>'],
+      // Evasion is the one silently capped stat: pilots, engine levels and the
+      // Gyro Stabiliser all keep taking your scrap after the number stops moving.
+      ['Evasion', d.evasion + '<small> %' + (d.evasionRaw > d.evasion ? ' · at cap, ' + (d.evasionRaw - d.evasion) + ' wasted' : d.evasion >= C.EVASION_CAP ? ' · at cap' : '') + '</small>'],
       ['Weapon Speed', '+' + Math.round((d.chargeMul - 1) * 100) + '<small> %</small>'],
       ['Repair', d.repairEvery ? '1<small> hull per ' + fmt(d.repairEvery) + ' s</small>' : '–'],
       ['Boarding Party', d.boarding ? d.boarding.dmg + '<small> damage per ' + d.boarding.every + ' s</small>' : '–']
@@ -3020,7 +3024,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v25',
+      cache: 'vega-v26',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
