@@ -1106,25 +1106,53 @@ function newRun(diff, seedVal, shipKey) {
   function copies(s, role, origin, stars) {
     return s.crew.filter(function (m) { return m.role === role && m.origin === origin && m.stars === stars; }).length;
   }
-  function canRecruit(s, role, origin) {
-    return s.crew.length < s.cap || copies(s, role, origin, 1) >= 2;
+  // Copies anywhere, including stowed ones. A benched crew member grants no
+  // synergy and no stat, but it is still a copy you own — stowing a spare to
+  // merge later is the whole reason to stow one, so the bench counts here.
+  function benchedCopies(s, role, origin, stars) {
+    return (s.bench || []).filter(function (e) {
+      return e.kind === 'crew' && e.m.role === role && e.m.origin === origin && e.m.stars === stars;
+    }).length;
   }
-  function wouldMerge(s, role, origin) { return copies(s, role, origin, 1) >= 2; }
+  function copiesAll(s, role, origin, stars) { return copies(s, role, origin, stars) + benchedCopies(s, role, origin, stars); }
+  function canRecruit(s, role, origin) {
+    return s.crew.length < s.cap || copiesAll(s, role, origin, 1) >= 2;
+  }
+  function wouldMerge(s, role, origin) { return copiesAll(s, role, origin, 1) >= 2; }
   function mergeCheck(s, role, origin) {
     var result = null;
     for (var st = 1; st <= 2; st++) {
-      var same = s.crew.filter(function (m) { return m.role === role && m.origin === origin && m.stars === st; });
       // Three of a kind make a two-star, but only two two-stars make a three-star.
       // At a flat three the third star needed nine copies of one of sixteen types
       // and never once appeared in 500 simulated runs — the whole tier, and the
       // three-star values in ROLE_VAL, were unreachable content.
       var need = st === 1 ? 3 : 2;
-      if (same.length >= need) {
-        var keep = same[0];
-        var drop = {}; drop[same[1].id] = true; if (need > 2) drop[same[2].id] = true;
-        s.crew = s.crew.filter(function (m) { return !drop[m.id]; });
-        keep.stars = st + 1;
-        result = keep;
+      // Pool the active crew with anything matching on the bench, active first so
+      // the survivor stays in service rather than being left stowed.
+      var pool = [], i;
+      for (i = 0; i < s.crew.length; i++) {
+        var m = s.crew[i];
+        if (m.role === role && m.origin === origin && m.stars === st) pool.push({ m: m, benched: false });
+      }
+      var bench = s.bench || [];
+      for (i = 0; i < bench.length; i++) {
+        var e = bench[i];
+        if (e.kind === 'crew' && e.m.role === role && e.m.origin === origin && e.m.stars === st) pool.push({ m: e.m, benched: true });
+      }
+      if (pool.length >= need) {
+        var keep = pool[0];
+        var dropIds = {};
+        for (i = 1; i < need; i++) dropIds[pool[i].m.id] = true;
+        s.crew = s.crew.filter(function (x) { return !dropIds[x.id]; });
+        s.bench = bench.filter(function (x) { return !(x.kind === 'crew' && dropIds[x.m.id]); });
+        keep.m.stars = st + 1;
+        // A survivor that was stowed comes back into service if there is a bunk,
+        // since it has just become something you would want to be using.
+        if (keep.benched && s.crew.length < s.cap) {
+          s.bench = s.bench.filter(function (x) { return !(x.kind === 'crew' && x.m.id === keep.m.id); });
+          s.crew.push(keep.m);
+        }
+        result = keep.m;
       }
     }
     return result;
@@ -1146,7 +1174,7 @@ function newRun(diff, seedVal, shipKey) {
   // individual purchase is refused for being over cap. This plans the whole
   // transaction so it can be taken atomically.
   function mergeBuyPlan(s, role, origin) {
-    var aboard = copies(s, role, origin, 1);
+    var aboard = copiesAll(s, role, origin, 1);
     var need = 3 - aboard;
     if (need < 2) return null;                      // a single buy already works
     if (need > shopCopies(s, role, origin)) return null;
@@ -2242,7 +2270,7 @@ function makeStore(s) {
     newRun: newRun, counts: counts, tierOf: tierOf, maxHull: maxHull, syncHull: syncHull, derive: derive, roleEffect: roleEffect,
     rollShop: rollShop, rerollPrice: rerollPrice, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, shopCopies: shopCopies, mergeBuyPlan: mergeBuyPlan, buyMerge: buyMerge, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
     upgradeCost: upgradeCost, upgrade: upgrade,
-    weaponValue: weaponValue, sellWeapon: sellWeapon,
+    weaponValue: weaponValue, sellWeapon: sellWeapon, copiesAll: copiesAll,
     BENCH_MAX: BENCH_MAX, benchRoom: benchRoom, benchWeapon: benchWeapon, benchCrew: benchCrew,
     benchDeploy: benchDeploy, benchSell: benchSell, toggleShopLock: toggleShopLock, replaceWeapon: replaceWeapon, giveWeapon: giveWeapon,
     genBeacons: genBeacons, genSectorMap: genSectorMap, reachable: reachable, interest: interest, jumpTo: jumpTo, afterNode: afterNode, dock: dock,
@@ -3149,7 +3177,7 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v29',
+      cache: 'vega-v30',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
