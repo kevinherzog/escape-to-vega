@@ -606,14 +606,14 @@ var VEGA = (function () {
     gunner:   [0.07, 0.15, 0.30],   // + weapon charge speed
     pilot:    [4, 9, 16],           // + evasion percentage points
     tech:     [0.18, 0.38, 0.70],   // + shield charge speed
-    engineer: [14, 8, 4]            // seconds per hull point repaired in combat
+    engineer: [14, 10, 7]           // seconds per hull point repaired in combat
   };
 
   var SYNERGIES = [
     { key: 'gunner',   kind: 'role',   tiers: ['Weapons charge 10% faster', 'Weapons charge 25% faster, combat starts half-charged'] },
     { key: 'pilot',    kind: 'role',   tiers: ['+8% evasion', '+18% evasion'] },
     { key: 'tech',     kind: 'role',   tiers: ['+1 shield layer', '+2 shield layers'] },
-    { key: 'engineer', kind: 'role',   tiers: ['+4 hull after every victory', '+8 hull after every victory, in-combat repair twice as fast'] },
+    { key: 'engineer', kind: 'role',   tiers: ['+4 hull after every victory', '+8 hull after every victory, and +1 hull every 18 s in combat'] },
     { key: 'human',    kind: 'origin', tiers: ['+2 scrap per victory', '+5 scrap per victory'] },
     { key: 'rock',     kind: 'origin', tiers: ['+8 max hull', '+20 max hull'] },
     { key: 'bug',      kind: 'origin', tiers: ['Boarding party: 1 damage every 7 s', 'Boarding party: 2 damage every 5 s'] },
@@ -644,7 +644,7 @@ var VEGA = (function () {
     ledger:   { key: 'ledger',   tier: 1, name: 'Syndicate Ledger',
                 desc: 'Each won fight pays 15 % interest on your scrap (max +8).', rate: 0.15, cap: 8 },
     welder:   { key: 'welder',   tier: 1, name: 'Weld Drone',
-                desc: 'In-combat repair fixes 2 hull per cycle, and runs even with no engineer.', amt: 2, every: 14 },
+                desc: 'Repairs 2 hull every 14 s in combat, on top of any engineers.', amt: 2, every: 14 },
     veil:     { key: 'veil',     tier: 1, name: 'Phase Veil',
                 desc: 'Beams can miss you (half evasion). Every dodge charges all weapons +4 %.', half: 0.5, charge: 0.04 },
     blackbox: { key: 'blackbox', tier: 1, name: 'Black Box',
@@ -862,6 +862,9 @@ function derive(s) {
 
     var startCharge = tg === 2 ? 0.5 : 0;
 
+    // One hull per tick, always. Everything that improves repair now moves the
+    // rate instead, so the hangar's "1 hull per N s" readout cannot drift from
+    // what the fight does — it did, while the Weld Drone was quietly healing 2.
     var repairAmt = 1;
 
 
@@ -891,15 +894,15 @@ function derive(s) {
 
     }
 
-    // Weld Drone: doubles the repair tick, and bootstraps one if there is no engineer.
+    // Weld Drone: its own repair cycle, added to the crew's rate. It used to set
+    // the per-tick amount instead, which multiplied the whole engineer track —
+    // the only relic in the game that scaled an entire crew role. Two engineers
+    // and this relic, a common pairing, repaired 0.64 hull a second, and four
+    // 3-star engineers with it reached 2.11: more than the Needle's entire hull
+    // pool, twice over, inside one fight. Added rather than multiplied, the relic
+    // is worth the same on its own and no longer doubles whoever is aboard.
 
-    if (hasRelic(s, 'welder')) {
-
-      repairAmt = RELICS.welder.amt;
-
-      if (repairRate <= 0) repairRate = 1 / RELICS.welder.every;
-
-    }
+    if (hasRelic(s, 'welder')) repairRate += RELICS.welder.amt / RELICS.welder.every;
 
     // Hoard Reactor: pays you for walking into a fight rich.
 
