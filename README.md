@@ -28,6 +28,10 @@ For the installable, offline, add-to-home-screen version it has to be served ove
   again into three stars.
 - **Synergies** unlock at two and four *distinct* crew sharing a role or an origin. A type already
   aboard counts for nothing — duplicates are merge material only.
+- **The bench** is two bays holding either a crew member or a weapon. Benched things are completely
+  inert — no synergy, no stats, no firing. It is storage, not capacity, so a full ship never has to
+  turn down a find: the hire waits, the gun gets stowed, and you fit or sell it later. A benched
+  crew member does still count toward a merge, which is the whole reason to keep a spare copy.
 - **Relics** are permanent passives from loot, trading posts and the relic broker, stacking without
   limit. Most are mild. A few, lined up with the right crew, are absurd — deliberately, and rarely.
 - **Sector modifiers** are weather that holds for a whole sector: an ion storm slowing every

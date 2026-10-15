@@ -1116,7 +1116,7 @@ function newRun(diff, seedVal, shipKey) {
   }
   function copiesAll(s, role, origin, stars) { return copies(s, role, origin, stars) + benchedCopies(s, role, origin, stars); }
   function canRecruit(s, role, origin) {
-    return s.crew.length < s.cap || copiesAll(s, role, origin, 1) >= 2;
+    return s.crew.length < s.cap || copiesAll(s, role, origin, 1) >= 2 || benchRoom(s);
   }
   function wouldMerge(s, role, origin) { return copiesAll(s, role, origin, 1) >= 2; }
   function mergeCheck(s, role, origin) {
@@ -1157,11 +1157,24 @@ function newRun(diff, seedVal, shipKey) {
     }
     return result;
   }
+  // Take them on optimistically, let a merge resolve, and only then decide where
+  // the body lives. A full ship used to refuse crew outright at every door — the
+  // shop, loot, and a dozen events all said "no room" and the reward evaporated
+  // even with both bench bays empty.
   function addCrew(s, role, origin, stars) {
     var m = makeCrew(s, role, origin, stars || 1);
     s.crew.push(m);
     var merged = mergeCheck(s, role, origin);
     syncHull(s);
+    if (s.crew.length > s.cap) {
+      var idx = s.crew.indexOf(m);
+      if (idx >= 0) {
+        s.crew.splice(idx, 1);
+        syncHull(s);
+        if (benchRoom(s)) { benchStore(s, { kind: 'crew', m: m }); return { member: m, merged: false, benched: true }; }
+        return { member: m, merged: false, refused: true };
+      }
+    }
     return { member: merged || m, merged: !!merged };
   }
   // How many unsold copies of this exact type the shop is offering right now.
@@ -1322,6 +1335,9 @@ function newRun(diff, seedVal, shipKey) {
     if (s.weapons.length < s.slots) { s.weapons.push(k); return true; }
     return false;
   }
+  // Offered when every mount is taken: stow it rather than forcing a swap or a
+  // refusal. A weapon on the bench can be fitted later or sold.
+  function stowWeapon(s, k) { return benchRoom(s) ? benchStore(s, { kind: 'weapon', k: k }) : false; }
 
   // ---------- Star map ----------
   // ---------- Sector map ----------
@@ -1751,16 +1767,14 @@ function makeLoot(s, type) {
 function takeLoot(s, o) {
     if (o.kind === 'weapon') return giveWeapon(s, o.k) ? { ok: true } : { replace: o.k };
     if (o.kind === 'crew') {
-      if (!canRecruit(s, o.role, o.origin)) {
-        // No bunk. Stow them if the bench is clear, otherwise they take passage
-        // with somebody else and leave you the fare — a dead option is worse
-        // than a small one.
-        if (benchRoom(s)) { benchStore(s, { kind: 'crew', m: makeCrew(s, o.role, o.origin, 1) }); return { ok: true, benched: true }; }
+      var r = addCrew(s, o.role, o.origin);
+      if (r.refused) {
+        // Nowhere at all to put them: they take passage with someone else and
+        // leave you the fare. A dead option is worse than a small one.
         var fee = 5; s.scrap += fee; s.stats.scrap += fee;
         return { ok: true, paidOut: fee };
       }
-      var r = addCrew(s, o.role, o.origin);
-      return { ok: true, member: r.member, merged: r.merged };
+      return { ok: true, member: r.member, merged: r.merged, benched: r.benched };
     }
     if (o.kind === 'scrap') { s.scrap += o.amount; s.stats.scrap += o.amount; return { ok: true }; }
     if (o.kind === 'hull') { s.hull = Math.min(maxHull(s), s.hull + o.amount); return { ok: true }; }
@@ -1848,6 +1862,8 @@ function makeStore(s) {
   function recruitText(r) {
     var m = r.member;
     if (r.merged) return m.name + ' merges with its kin and rises to ' + m.stars + ' stars.';
+    if (r.refused) return 'There is nowhere to put ' + m.name + ' — every bunk full and both bays loaded.';
+    if (r.benched) return m.name + ' (' + ROLES[m.role].name + ', ' + ORIGINS[m.origin].name + ') comes aboard and waits on the bench; no bunk is free.';
     return m.name + ' (' + ROLES[m.role].name + ', ' + ORIGINS[m.origin].name + ') is on board.';
   }
 
@@ -1969,7 +1985,7 @@ function makeStore(s) {
     { id: 'hive', title: 'Insectoid Nest', text: 'An insectoid nest hums on an asteroid.',
       setup: function () { return { role: R.pick(ROLE_KEYS) }; },
       choices: function (s, ctx) { return [
-        { label: 'Negotiate', hint: 'Requires Insectoids on board', req: function (s) { return (counts(s).bug || 0) >= 1 && canRecruit(s, ctx.role, 'bug'); }, why: 'No insectoid on board or no room', run: function (s) {
+        { label: 'Negotiate', hint: 'Requires Insectoids on board', req: function (s) { return (counts(s).bug || 0) >= 1 && canRecruit(s, ctx.role, 'bug'); }, why: 'No insectoid on board, or nowhere to put them', run: function (s) {
           return { text: recruitText(addCrew(s, ctx.role, 'bug')) + ' The nest sends you ' + (ctx.role === 'gunner' ? 'a gunner' : 'reinforcements') + '.' };
         } },
         { label: 'Attack', hint: 'Combat, +5 scrap extra', run: function () { return { text: 'The nest sends an armed ship.', combat: { type: 'fight', bonusScrap: 5 } }; } },
@@ -1991,7 +2007,7 @@ function makeStore(s) {
   { id: 'stowaway', title: 'Stowaway', text: 'A heat signature turns up behind a cargo bulkhead that should be empty.',
     setup: function (s) { return { t: randomType() }; },
     choices: function (s, ctx) { return [
-      { label: 'Let them stay', hint: typeLabel(ctx.t), req: function (s) { return canRecruit(s, ctx.t.role, ctx.t.origin); }, why: 'No bunk free',
+      { label: 'Let them stay', hint: typeLabel(ctx.t), req: function (s) { return canRecruit(s, ctx.t.role, ctx.t.origin); }, why: 'Every bunk full and both bays loaded',
         run: function (s) { return { text: recruitText(addCrew(s, ctx.t.role, ctx.t.origin)) }; } },
       { label: 'Report them for the reward', run: function (s) { var g = R.int(7, 12); gainScrap(s, g); return { text: 'The bounty clerk does not ask questions. +' + g + ' scrap.' }; } }
     ]; } },
@@ -2270,7 +2286,7 @@ function makeStore(s) {
     newRun: newRun, counts: counts, tierOf: tierOf, maxHull: maxHull, syncHull: syncHull, derive: derive, roleEffect: roleEffect,
     rollShop: rollShop, rerollPrice: rerollPrice, canRecruit: canRecruit, wouldMerge: wouldMerge, copies: copies, buyCrew: buyCrew, shopCopies: shopCopies, mergeBuyPlan: mergeBuyPlan, buyMerge: buyMerge, sellCrew: sellCrew, reroll: reroll, addCrew: addCrew,
     upgradeCost: upgradeCost, upgrade: upgrade,
-    weaponValue: weaponValue, sellWeapon: sellWeapon, copiesAll: copiesAll,
+    weaponValue: weaponValue, sellWeapon: sellWeapon, copiesAll: copiesAll, stowWeapon: stowWeapon,
     BENCH_MAX: BENCH_MAX, benchRoom: benchRoom, benchWeapon: benchWeapon, benchCrew: benchCrew,
     benchDeploy: benchDeploy, benchSell: benchSell, toggleShopLock: toggleShopLock, replaceWeapon: replaceWeapon, giveWeapon: giveWeapon,
     genBeacons: genBeacons, genSectorMap: genSectorMap, reachable: reachable, interest: interest, jumpTo: jumpTo, afterNode: afterNode, dock: dock,
@@ -2498,6 +2514,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
           '<p>Scrap buys crew, weapons, relics, repairs and upgrades. Banked scrap earns interest, +1 per 10 held, up to +5 a jump — but sitting on it while under-equipped is a quick way to die.</p>' +
           '<p>Rerolling the recruit list costs more each time within a single stop, and resets at the next jump.</p>' +
           '<p>From sector 2 a relic broker appears, selling relics at a steep markup. It is the one thing worth saving for.</p>') +
+        helpSection('The bench', false,
+          '<p>Two bays in the hangar that hold either a crew member or a weapon. Anything on the bench is <b>completely inert</b>: a benched crew member feeds no synergy and no stat, a benched weapon never fires. It is storage, not capacity.</p>' +
+          '<p>It means a full ship never has to turn down a find. With every bunk taken a hire or a rescue waits on the bench; with every mount taken a new gun can be stowed instead of swapping one out. Later you fit it, or sell it.</p>' +
+          '<p>One thing a benched crew member still does is <b>count toward a merge</b> — that is the whole reason to keep a spare copy around.</p>') +
         helpSection('Relics', false,
           '<p>Relics are permanent for the rest of the run and stack without limit. Most are small. A few, lined up with the right crew, are not.</p>')) +
       footBar('', '<button class="btn btn-primary" data-a="helpback" data-v="' + back + '">Back ' + ic('i-go') + '</button>');
@@ -2672,6 +2692,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
       }
       // A duplicate type is only worth anything as merge fodder now, so when the
       // whole merge is on the table that is the action to offer, full bunks or not.
+      // With no bunk free the hire still goes through — into the bench — so say
+      // where they will end up rather than letting the price imply a seat.
+      var toBench = can && !plan && s.crew.length >= s.cap;
+      if (toBench) badges += '<span class="badge">No bunk · waits on the bench</span>';
       var btn = plan
         ? '<button class="btn btn-small btn-primary" data-a="buymerge" data-v="' + i + '" aria-label="Buy ' + plan.need + ' and upgrade for ' + plan.cost + ' scrap">' + cost(plan.cost) + '</button>'
         : '<button class="btn btn-small' + (merge ? ' btn-primary' : '') + '" data-a="buy" data-v="' + i + '"' + (can && afford ? '' : ' disabled') + ' aria-label="Hire for ' + C.CREW_PRICE + ' scrap">' + (can ? cost(C.CREW_PRICE) : 'Full') + '</button>';
@@ -2682,7 +2706,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     }).join('');
     return panel('Recruit', 'new selection each jump',
       '<div class="offers">' + rows + '</div>' +
-      (full ? '<p class="note pad">All bunks full. Expand quarters or dismiss someone. A third matching crew member always fits, since it merges.</p>' : '') +
+      (full ? '<p class="note pad">All bunks full. A hire now waits on the bench' + (L.benchRoom(s) ? '' : ', and both bays are loaded') + ' — expand quarters or dismiss someone to put them to work. A third matching crew member always fits, since it merges.</p>' : '') +
       '<div class="row-actions">' +
       '<button class="btn" data-a="lock" aria-pressed="' + !!s.shopLock + '">' + (s.shopLock ? 'Held for next jump' : 'Hold this list') + '</button>' +
       '<button class="btn" data-a="reroll"' + (s.scrap >= L.rerollPrice(s) ? '' : ' disabled') + '>New Selection ' + cost(L.rerollPrice(s)) + '</button></div>' +
@@ -3089,7 +3113,7 @@ function viewStore() {
     }
     return topBar() +
       panel('Trading Post', 'Weapons ' + s.weapons.length + '/' + s.slots,
-        '<p class="note pad">' + (s.weapons.length >= s.slots ? 'All slots full: a new weapon replaces an old one; the old one earns half its price.' : 'Purchased weapons are installed immediately.') + '</p>' +
+        '<p class="note pad">' + (s.weapons.length >= s.slots ? 'All slots full: a new weapon either replaces an old one — the old one earns half its price — or' + (L.benchRoom(s) ? ' goes on the bench for later.' : ' would go on the bench, which is loaded.') : 'Purchased weapons are installed immediately.') + '</p>' +
         '<div class="offers">' + offers + '</div>') +
       relicPanel +                                                            // NEW
       panel('Shipyard', '',
@@ -3104,9 +3128,12 @@ function viewStore() {
     var rows = s.weapons.map(function (k, i) {
       return '<button class="btn opt" data-a="rep" data-v="' + i + '"><span>Remove ' + L.WEAPONS[k].name + '</span><small>earns ' + L.weaponValue(k) + ' scrap · ' + L.WEAPONS[k].desc + '</small></button>';
     }).join('');
+    var stow = L.benchRoom(s)
+      ? '<button class="btn opt" data-a="repstow"><span>Stow ' + W.name + ' on the bench</span><small>keeps all ' + s.weapons.length + ' guns mounted · sell or fit it later</small></button>'
+      : '<p class="note pad">The bench is full too, so this one can only replace a mounted gun.</p>';
     return topBar() +
       panel('All Weapon Slots Full', '', '<h1 class="ev-title">' + W.name + '</h1><p class="ev-text">' + W.desc + '. Which weapon should make room for it?</p>') +
-      '<div class="choices">' + rows + '</div>' +
+      '<div class="choices">' + rows + stow + '</div>' +
       '<button class="btn" data-a="repskip">' + (rp.refund ? 'Don’t buy it after all · ' + rp.refund + ' scrap refunded' : 'Leave ' + W.name + ' behind') + '</button>';
   }
 
@@ -3263,7 +3290,9 @@ function viewStore() {
     'buy': function (v) {
       var r = L.buyCrew(S.run, +v);
       if (!r) return;
-      toast(r.merged ? r.member.name + ' merges: now ' + r.member.stars + ' stars' : r.member.name + ' is on board');
+      toast(r.merged ? r.member.name + ' merges: now ' + r.member.stars + ' stars'
+        : r.benched ? r.member.name + ' hired — waiting on the bench'
+        : r.member.name + ' is on board');
       render();
     },
     'buymerge': function (v) {
@@ -3384,6 +3413,15 @@ function viewStore() {
       S.replace = null;
       go(rp.back);
     },
+    'repstow': function () {
+      var rp = S.replace;
+      if (!L.stowWeapon(S.run, rp.k)) { toast('The bench is full'); return; }
+      toast(L.WEAPONS[rp.k].name + ' stowed on the bench');
+      if (rp.back === 'reward') S.reward.taken = L.WEAPONS[rp.k].name + ' goes into storage.';
+      if (rp.back === 'event') S.eventOut.text += ' The weapon goes into storage.';
+      S.replace = null;
+      go(rp.back);
+    },
     'repskip': function () {
       var rp = S.replace;
       if (rp.back === 'store' && rp.refund) { S.run.scrap += rp.refund; S.store.offers[rp.offer].sold = false; }
@@ -3409,6 +3447,8 @@ function viewStore() {
   window.FNV = {
     S: S, L: L,
     act: function (a, v) { ACTIONS[a](v == null ? null : String(v)); },
+    go: function (v) { go(v); },
+    render: function () { render(); },
     finishCombat: function () { var c = S.combat; if (!c) return; while (!c.over) L.stepCombat(c, STEP); }
   };
 
