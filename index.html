@@ -274,6 +274,8 @@ details.more .helpbody { padding: 2px 8px 8px; }
   background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 8px 8px 12px;
 }
 .offer.sold { opacity: 0.5; }
+.offer.locked { opacity: 0.45; border-style: dashed; }
+.offer.locked .otype b { letter-spacing: 0.08em; }
 .otype { display: flex; flex-wrap: wrap; gap: 4px 12px; font-weight: 600; font-size: 14px; }
 .oeff { font-size: 12.5px; color: var(--muted); }
 .badge { display: inline-block; font: 600 11px/1.3 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; border: 1px solid var(--line); color: var(--muted); margin-right: 4px; }
@@ -718,6 +720,14 @@ var VEGA = (function () {
   function relicPool(s, minTier) {
     return RELIC_KEYS.filter(function (k) { return RELICS[k].tier >= (minTier || 1) && !hasRelic(s, k); });
   }
+  // Anything this returns is about to be shown to the player, so this is the one
+  // choke point where "seen" can be recorded without chasing every offer screen.
+  function noteSeen(s, k) {
+    if (!k || !RELICS[k]) return k;
+    if (!s.seenRelics) s.seenRelics = [];
+    if (s.seenRelics.indexOf(k) < 0) s.seenRelics.push(k);
+    return k;
+  }
   function rollRelic(s, minTier) {
     var pool = relicPool(s, minTier || 1);
     if (!pool.length && (minTier || 1) > 1) pool = relicPool(s, 1);
@@ -726,13 +736,14 @@ var VEGA = (function () {
     var tot = 0, i;
     for (i = 0; i < pool.length; i++) tot += w[RELICS[pool[i]].tier - 1];
     var r = R.f() * tot;
-    for (i = 0; i < pool.length; i++) { r -= w[RELICS[pool[i]].tier - 1]; if (r < 0) return pool[i]; }
-    return pool[pool.length - 1];
+    for (i = 0; i < pool.length; i++) { r -= w[RELICS[pool[i]].tier - 1]; if (r < 0) return noteSeen(s, pool[i]); }
+    return noteSeen(s, pool[pool.length - 1]);
   }
   function addRelic(s, k) {
     if (!RELICS[k]) return null;
     if (!s.relics) s.relics = [];
     if (s.relics.indexOf(k) < 0) s.relics.push(k);
+    noteSeen(s, k);
     return RELICS[k];
   }
   /* relic flags that the combat hooks read off a side object */
@@ -1073,6 +1084,11 @@ function newRun(diff, seedVal, shipKey) {
       crew: [], cap: SHIP.cap,
       scrap: Math.max(0, SHIP.scrap + D.scrap),
       relics: SHIP.relic ? [SHIP.relic] : [],
+      // Every relic this run has put in front of the player, taken or not. The UI
+      // folds it into a permanent archive — a Prime relic turns up in about one
+      // run in twelve, so without a record of them they are a thing you glimpse
+      // and forget rather than a set you can work toward.
+      seenRelics: SHIP.relic ? [SHIP.relic] : [],
       rerolls: 0,
       bench: [],
       shopLock: false,
@@ -2315,7 +2331,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   var L = VEGA, C = L.C;
   var STEP = 0.05;
   var SAVE_KEY = 'fnv-save-v1', REC_KEY = 'fnv-record-v1', SPEED_KEY = 'fnv-speed-v1';
-  var DIFF_KEY = 'fnv-diff-v1', UNLOCK_KEY = 'fnv-unlock-v1';
+  var DIFF_KEY = 'fnv-diff-v1', UNLOCK_KEY = 'fnv-unlock-v1', CODEX_KEY = 'fnv-codex-v1';
   var SHIP_KEY = 'fnv-ship-v1', SHIPS_KEY = 'fnv-ships-v1';
   var Y_E = 19, Y_P = 81;
 
@@ -2334,7 +2350,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   // ---------- Storage (all optional) ----------
   function put(key, val) { try { if (val === undefined) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* no storage */ } }
   function get(key) { try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
-  function saveRun() { if (S.run && !S.run.dead && !S.run.won) put(SAVE_KEY, S.run); }
+  // The archive is folded in on every save and at every run end, so a relic seen
+  // in a run that then died is still recorded.
+  function saveRun() { noteCodex(S.run); if (S.run && !S.run.dead && !S.run.won) put(SAVE_KEY, S.run); }
   function clearRun() { put(SAVE_KEY, undefined); }
   function savedRun() {
     var r = get(SAVE_KEY);
@@ -2350,8 +2368,25 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     }
     return r;
   }
+  // ---------- Relic archive ----------
+  // Permanent across runs: which relics have ever been shown, and which have
+  // actually been carried. Prime relics are deliberately scarce — roughly one run
+  // in twelve shows a given one — so the archive is what makes them a set you can
+  // chase rather than something you see once and half-remember.
+  function codex() { var c = get(CODEX_KEY); return (c && c.seen) ? c : { seen: {}, held: {} }; }
+  function noteCodex(s) {
+    if (!s) return;
+    var c = codex(), dirty = false;
+    (s.seenRelics || []).forEach(function (k) { if (!c.seen[k]) { c.seen[k] = 1; dirty = true; } });
+    (s.relics || []).forEach(function (k) {
+      if (!c.seen[k]) { c.seen[k] = 1; dirty = true; }
+      if (!c.held[k]) { c.held[k] = 1; dirty = true; }
+    });
+    if (dirty) put(CODEX_KEY, c);
+  }
   function record() { return get(REC_KEY) || { runs: 0, wins: 0, best: 0 }; }
   function addRecord(won) {
+    noteCodex(S.run);
     var r = record();
     r.runs++; if (won) r.wins++;
     r.best = Math.max(r.best || 0, won ? 4 : S.run.sector);
@@ -2400,7 +2435,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
   var RELIC_IC = {
     lathe: 'i-scrap', ledger: 'i-coin', welder: 'i-engineer', veil: 'i-pilot', blackbox: 'i-event',
     coil: 'i-tech', spike: 'i-spark', cascade: 'i-spark', reactor: 'i-scrap',
-    hive: 'i-bug', chorus: 'i-human', prism: 'i-gunner'
+    hive: 'i-bug', chorus: 'i-human', prism: 'i-gunner',
+    // The eight below had no icon and fell back to the generic marker. Harmless
+    // in a one-off loot card, obvious in the archive where they sit in a column.
+    plating: 'i-hull', gyro: 'i-pilot', loader: 'i-gunner', fieldkit: 'i-engineer',
+    furnace: 'i-scrap', twinfeed: 'i-gunner', battery: 'i-tech', dread: 'i-boss'
   };
   var RELIC_TIER = { 1: 'Common', 2: 'Rare', 3: 'Prime' };
   function relicBadge(r) {
@@ -2522,8 +2561,47 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
           '<p>It means a full ship never has to turn down a find. With every bunk taken a hire or a rescue waits on the bench; with every mount taken a new gun can be stowed instead of swapping one out. Later you fit it, or sell it.</p>' +
           '<p>One thing a benched crew member still does is <b>count toward a merge</b> — that is the whole reason to keep a spare copy around.</p>') +
         helpSection('Relics', false,
-          '<p>Relics are permanent for the rest of the run and stack without limit. Most are small. A few, lined up with the right crew, are not.</p>')) +
+          '<p>Relics are permanent for the rest of the run and stack without limit. Most are small. A few, lined up with the right crew, are not.</p>' +
+          '<p>There are three grades. <b>Common</b> and <b>Rare</b> turn up often enough to plan around. <b>Prime</b> relics are the run-breakers, and they are deliberately scarce — a given one shows up in roughly one run in twelve. The Relic Archive on the title screen remembers every one you have been shown.</p>')) +
       footBar('', '<button class="btn btn-primary" data-a="helpback" data-v="' + back + '">Back ' + ic('i-go') + '</button>');
+  }
+
+  // ---------- Relic archive ----------
+  function codexPanel() {
+    var c = codex();
+    var n = L.RELIC_KEYS.filter(function (k) { return c.seen[k]; }).length;
+    var primes = L.RELIC_KEYS.filter(function (k) { return L.RELICS[k].tier === 3; });
+    var pn = primes.filter(function (k) { return c.seen[k]; }).length;
+    return panel('Relic Archive', n + ' / ' + L.RELIC_KEYS.length + ' recorded',
+      '<p class="note pad">Every relic a flight has put in front of you, kept between runs. Prime: ' +
+      pn + ' of ' + primes.length + ' found.</p>' +
+      '<button class="btn" data-a="codex">Open the archive ' + ic('i-go') + '</button>');
+  }
+  function viewCodex() {
+    var c = codex();
+    var all = L.RELIC_KEYS.map(function (k) { return L.RELICS[k]; });
+    var foundN = all.filter(function (r) { return c.seen[r.key]; }).length;
+    var groups = [3, 2, 1].map(function (tier) {
+      var list = all.filter(function (r) { return r.tier === tier; });
+      var found = list.filter(function (r) { return c.seen[r.key]; }).length;
+      var rows = list.map(function (r) {
+        if (!c.seen[r.key]) {
+          return '<div class="offer locked"><span class="otype">' + ic('i-event') + ' <b>Unrecorded</b></span>' +
+            '<span class="oeff">No survivor has brought one back yet.</span></div>';
+        }
+        return '<div class="offer"><span class="otype">' + ic(RELIC_IC[r.key] || 'i-event') + ' <b>' + r.name + '</b></span>' +
+          '<span class="oeff">' + r.desc + '</span>' +
+          (c.held[r.key] ? '<span class="obadges"><span class="badge syn">Carried</span></span>' : '<span class="obadges"><span class="badge">Seen</span></span>') +
+          '</div>';
+      }).join('');
+      return panel(RELIC_TIER[tier], found + ' / ' + list.length + ' found',
+        (tier === 3 ? '<p class="note pad">The run-breakers. Scarce on purpose — these are meant to be a story you tell afterwards, not a thing you plan around.</p>' : '') +
+        '<div class="offers">' + rows + '</div>');
+    }).join('');
+    return '<section class="end-hero"><p class="eyebrow">Salvage Records</p><h1 class="display">Relic Archive</h1>' +
+      '<p class="lead">' + foundN + ' of ' + all.length + ' relics recorded. A relic is logged the moment it is offered, whether or not you take it.</p></section>' +
+      groups +
+      footBar('', '<button class="btn btn-primary" data-a="title">Back ' + ic('i-go') + '</button>');
   }
   function viewTitle() {
     var saved = savedRun(), rec = record();
@@ -2547,6 +2625,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
         '<li>' + ic('i-coin') + '<span>Saved-up scrap earns interest: +1 per 10 scrap, up to +5 per jump.</span></li>' +
       '</ul>' +
         '<button class="btn" data-a="help">Full reference ' + ic('i-event') + '</button>') +
+      codexPanel() +
       (rec.runs ? '<p class="record">' + rec.runs + (rec.runs === 1 ? ' flight' : ' flights') + ' so far · Vega reached: ' + rec.wins + '× · farthest flight: ' + (rec.best > 3 ? 'Vega' : 'Sector ' + rec.best) + '</p>' : '');
   }
 
@@ -3244,10 +3323,10 @@ function viewStore() {
     while (box.children.length > 3) box.removeChild(box.firstChild);
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2700);
   }
-  var VIEWS = { 'export': viewExport, help: viewHelp, broker: viewBroker, title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
+  var VIEWS = { 'export': viewExport, help: viewHelp, codex: viewCodex, broker: viewBroker, title: viewTitle, hangar: viewHangar, map: viewMap, combat: viewCombat, reward: viewReward, event: viewEvent, store: viewStore, replace: viewReplace, dock: viewDock, over: viewOver, win: viewWin };
   function render() {
     // the reference is readable before a run exists; everything else needs one
-    if (S.screen !== 'title' && S.screen !== 'help' && !S.run) S.screen = 'title';
+    if (S.screen !== 'title' && S.screen !== 'help' && S.screen !== 'codex' && !S.run) S.screen = 'title';
     document.getElementById('app').innerHTML = VIEWS[S.screen]();
     if (S.screen === 'combat') {
       bindCombat();
@@ -3280,6 +3359,7 @@ function viewStore() {
       go('export');
     },
     'help': function () { go('help'); },
+    'codex': function () { go('codex'); },
     'helpback': function (v) { go(v === 'hangar' && S.run ? 'hangar' : 'title'); },
     'exportback': function () { S.exportText = null; go(S.run.dead ? 'over' : S.run.won ? 'win' : 'hangar'); },
     'map': function () { S.sel = { crew: null, weapon: null }; go('map'); },
