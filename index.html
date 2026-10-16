@@ -1270,14 +1270,19 @@ function newRun(diff, seedVal, shipKey) {
     if (!e) return null;
     if (e.kind === 'weapon') {
       if (s.weapons.length >= s.slots) return { noRoom: true };
+      s.bench.splice(i, 1);
       s.weapons.push(e.k);
     } else {
       if (s.crew.length >= s.cap) return { noRoom: true };
+      // Off the bench first, then merge. mergeCheck removes the benched copies
+      // it consumes as fodder, so the array shifts underneath; splicing by index
+      // afterwards removed whatever had slid into this slot instead, destroying
+      // an unrelated weapon or crew member and paying nothing for it.
+      s.bench.splice(i, 1);
       s.crew.push(e.m);
       mergeCheck(s, e.m.role, e.m.origin);
       syncHull(s);
     }
-    s.bench.splice(i, 1);
     return { ok: true };
   }
   function benchSell(s, i) {
