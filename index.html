@@ -2346,6 +2346,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = VEGA;
     event: null, eventOut: null,
     store: null, broker: null, reward: null, replace: null, dockHeal: 0,
     sel: { crew: null, weapon: null, relic: null, bench: null },
+    cacheName: null,                       // filled in from the live service worker cache
     synOpen: false,
     speed: 2,
     diff: 0,
@@ -3291,7 +3292,11 @@ function viewStore() {
     var s = S.run, d = L.derive(s);
     return {
       game: 'Escape to Vega',
-      cache: 'vega-v30',
+      // Read from the live cache, never written here. A hardcoded string sat at
+      // 'vega-v30' through four releases and reported it on builds that were not
+      // v30 at all, which is worse than no field: it was used to decide the
+      // player had not updated when they had.
+      cache: S.cacheName || 'unknown',
       when: new Date().toISOString(),
       seed: s.seed,
       shipName: L.loadoutOf(s).name,
@@ -3549,6 +3554,16 @@ function viewStore() {
     } else S.screen = 'title';
     render();
   }
+  // Ask the browser which vega cache is actually installed, so a run report says
+  // what the phone is really running rather than what the source once claimed.
+  try {
+    if (window.caches && caches.keys) caches.keys().then(function (keys) {
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].indexOf('vega-v') === 0) { S.cacheName = keys[i]; return; }
+      }
+    })['catch'](function () { /* no cache access */ });
+  } catch (e) { /* no caches API, e.g. opened from file:// */ }
+
   var hot = window.claude && window.claude.hot;
   try {
     if (hot && hot.snapshot) hot.snapshot(function () {
