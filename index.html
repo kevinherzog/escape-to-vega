@@ -18,7 +18,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@800&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
 <style>
-:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 :root {
   /* Portrait console: one column of instrument panels; in combat a vertical radar lane between enemy (top) and your ship (bottom) */
   --bg: #d6ddd7;          /* console paint, green-grey */
@@ -91,12 +90,17 @@ button { font: inherit; color: inherit; }
 .num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.app { max-width: 560px; margin-inline: auto; padding-inline: 16px; padding-block: 12px 0; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
+.app { max-width: 560px; margin-inline: auto; padding-inline: 16px; padding-block: calc(12px + env(safe-area-inset-top, 0px)) 0; display: flex; flex-direction: column; gap: 12px; min-height: 100vh; }
+/* The safe-area insets are taken here and in the header and footer, never on the
+   root as well: padding <html> too made every screen 81px taller than an iPhone,
+   so the sticky header parked under the status bar with cards scrolling above it
+   and the footer floated off the bottom. Screens without a footer pad themselves. */
+.app:not(:has(> .foot)) { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* ---------- Header ---------- */
 .top {
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
-  margin-inline: -16px; padding: 10px 16px;
+  position: sticky; top: 0; z-index: 5;
+  margin: calc(-12px - env(safe-area-inset-top, 0px)) -16px 0; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center;
@@ -381,7 +385,7 @@ details.more .helpbody { padding: 2px 8px 8px; }
 .loot { display: grid; grid-template-columns: 1fr; gap: 8px; }
 
 /* ---------- Combat ---------- */
-.combat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; height: calc(100vh - 12px); height: calc(100svh - 12px); }
+.combat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; height: calc(100vh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); height: calc(100svh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
 .sidep { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; box-shadow: var(--shadow); }
 .sidep-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .sidep-name { font: 800 22px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; overflow-wrap: anywhere; }
